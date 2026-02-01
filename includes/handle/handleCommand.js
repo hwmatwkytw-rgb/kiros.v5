@@ -17,18 +17,45 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     senderID = String(senderID);
     threadID = String(threadID);
 
-    /* ================= وضع الصيانة ================= */
     const adminID = "61581906898524"; // أيدي المطور الخاص بك
+
+    /* ================= وضع الصيانة ================= */
     if (global.config.maintenanceMode === true && senderID !== adminID) {
       return; 
     }
     /* ============================================= */
 
     const threadSetting = threadData.get(threadID) || {};
-    
-    const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : '/';
-    const prefixRegex = new RegExp(`^(<@!?${senderID}>|${escapeRegex(prefix)})\\s*`);
+    const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : (global.config.PREFIX || '/');
 
+    // --- [ بداية منطق البادئة المدمج ] ---
+    if (body) {
+      const rawBody = body.trim().split(/ +/);
+      const firstWord = rawBody[0].toLowerCase();
+      const newPrefix = rawBody[1];
+
+      // للمطور: تغيير البادئة (بدون بادئة قبل الكلمة)
+      if ((firstWord === "بادئة" || firstWord === "prefix") && senderID === adminID) {
+        if (!newPrefix) return api.sendMessage("⚠️ يرجى كتابة البادئة الجديدة بعد الكلمة.\nمثال: بادئة #", threadID, messageID);
+        
+        threadSetting["PREFIX"] = newPrefix;
+        await Threads.setData(threadID, { data: threadSetting });
+        global.data.threadData.set(threadID, threadSetting);
+
+        const botID = api.getCurrentUserID();
+        api.changeNickname(`[ ${newPrefix} ] • ${global.config.BOTNAME || "كايـࢪوس"}`, threadID, botID);
+
+        return api.sendMessage(`✅ تم تغيير البادئة إلى: [ ${newPrefix} ]\nتم تحديث كنية البوت وإجبار التعامل مع الرمز الجديد.`, threadID, messageID);
+      }
+
+      // للمستخدم العادي: عرض البادئة فقط
+      if ((firstWord === "بادئة" || firstWord === "prefix") && !body.startsWith(prefix)) {
+        return api.sendMessage(`⦿ البادئة الحالية لهذه المجموعة هي: [ ${prefix} ]`, threadID, messageID);
+      }
+    }
+    // --- [ نهاية منطق البادئة المدمج ] ---
+
+    const prefixRegex = new RegExp(`^(<@!?${senderID}>|${escapeRegex(prefix)})\\s*`);
     if (!body) return;
     const [matchedPrefix] = body.match(prefixRegex) || [null];
     if (!matchedPrefix) return; 
@@ -39,7 +66,6 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     
     if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
     
-    /* التعديل هنا: حذف الرد النصي واستبداله بتفاعل */
     if (!command) {
       var allCommandName = [];
       const commandValues = commands.keys();
@@ -49,28 +75,18 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
       if (checker.bestMatch.rating >= 0.8) {
         command = commands.get(checker.bestMatch.target);
       } else {
-        // إذا لم يتم العثور على أمر، نضع تفاعل القرد
         return api.setMessageReaction("🦧", messageID, (err) => {}, true);
       }
     }
-    /* ============================================= */
 
     if (userBanned.has(senderID) || threadBanned.has(threadID) || (allowInbox === false && senderID == threadID)) {
       if (!ADMINBOT.includes(senderID) && senderID !== adminID) {
         if (userBanned.has(senderID)) {
           const { reason, dateAdded } = userBanned.get(senderID) || {};
-          return api.sendMessage(
-            global.getText("handleCommand", "userBanned", reason, dateAdded),
-            threadID,
-            async (err, info) => { return; } 
-          );
+          return api.sendMessage(global.getText("handleCommand", "userBanned", reason, dateAdded), threadID);
         } else if (threadBanned.has(threadID)) {
           const { reason, dateAdded } = threadBanned.get(threadID) || {};
-          return api.sendMessage(
-            global.getText("handleCommand", "threadBanned", reason, dateAdded),
-            threadID,
-            async (err, info) => { return; }
-          );
+          return api.sendMessage(global.getText("handleCommand", "threadBanned", reason, dateAdded), threadID);
         }
       }
     }
@@ -80,17 +96,9 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         const banThreads = commandBanned.get(threadID) || [];
         const banUsers = commandBanned.get(senderID) || [];
         if (banThreads.includes(command.config.name)) {
-          return api.sendMessage(
-            global.getText("handleCommand", "commandThreadBanned", command.config.name),
-            threadID,
-            async (err, info) => { return; }
-          );
+          return api.sendMessage(global.getText("handleCommand", "commandThreadBanned", command.config.name), threadID);
         } else if (banUsers.includes(command.config.name)) {
-          return api.sendMessage(
-            global.getText("handleCommand", "commandUserBanned", command.config.name),
-            threadID,
-            async (err, info) => { return; }
-          );
+          return api.sendMessage(global.getText("handleCommand", "commandUserBanned", command.config.name), threadID);
         }
       }
     }
@@ -98,21 +106,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     if (command.config.commandCategory.toLowerCase() == "nsfw" &&
       !global.data.threadAllowNSFW.includes(threadID) &&
       !ADMINBOT.includes(senderID)) {
-      return api.sendMessage(
-        global.getText("handleCommand", "threadNotAllowNSFW"),
-        threadID,
-        async (err, info) => { return; }
-      );
-    }
-
-    var threadInfo2;
-    if (event.isGroup) {
-      try {
-        threadInfo2 = threadInfo.get(threadID) || await Threads.getInfo(threadID);
-        if (Object.keys(threadInfo2).length == 0) throw new Error();
-      } catch (err) {
-        logger(global.getText("handleCommand", "cantGetInfoThread", "error"));
-      }
+      return api.sendMessage(global.getText("handleCommand", "threadNotAllowNSFW"), threadID);
     }
 
     var permssion = 0;
@@ -122,10 +116,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     else if (find) permssion = 1;
 
     if (command.config.hasPermssion > permssion) {
-      return api.sendMessage(
-        global.getText("handleCommand", "permssionNotEnough", command.config.name),
-        event.threadID
-      );
+      return api.sendMessage(global.getText("handleCommand", "permssionNotEnough", command.config.name), event.threadID);
     }
 
     if (!client.cooldowns.has(command.config.name)) {
@@ -153,22 +144,15 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     }
 
     try {
-      const Obj = {
-        api, event, args, models, Users, Threads, Currencies, permssion, getText: getText2
-      };
+      const Obj = { api, event, args, models, Users, Threads, Currencies, permssion, getText: getText2 };
       command.run(Obj);
       timestamps.set(senderID, dateNow);
       if (DeveloperMode) {
-        logger(
-          global.getText("handleCommand", "executeCommand", time, commandName, senderID, threadID, args.join(" "), Date.now() - dateNow),
-          "[ DEV MODE ]"
-        );
+        logger(global.getText("handleCommand", "executeCommand", time, commandName, senderID, threadID, args.join(" "), Date.now() - dateNow), "[ DEV MODE ]");
       }
       return;
     } catch (e) {
-      return api.sendMessage(global.getText("handleCommand", "commandError", commandName, e), threadID, async (err, info) => {
-        return; 
-      });
+      return api.sendMessage(global.getText("handleCommand", "commandError", commandName, e), threadID);
     }
   };
 };
