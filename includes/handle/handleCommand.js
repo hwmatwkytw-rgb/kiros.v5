@@ -17,43 +17,44 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     senderID = String(senderID);
     threadID = String(threadID);
 
-    const adminID = "61581906898524"; // أيدي المطور الخاص بك
+    const adminID = "61581906898524"; 
 
-    /* ================= وضع الصيانة ================= */
+    /* وضع الصيانة */
     if (global.config.maintenanceMode === true && senderID !== adminID) {
       return; 
     }
-    /* ============================================= */
 
     const threadSetting = threadData.get(threadID) || {};
-    const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : (global.config.PREFIX || '/');
+    const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : (global.config.PREFIX || "/");
 
-    // --- [ بداية منطق البادئة المدمج ] ---
+    /* منطق البادئة المطور - الحفظ الدائم */
     if (body) {
       const rawBody = body.trim().split(/ +/);
       const firstWord = rawBody[0].toLowerCase();
-      const newPrefix = rawBody[1];
+      const argsPrefix = rawBody.slice(1);
 
-      // للمطور: تغيير البادئة (بدون بادئة قبل الكلمة)
-      if ((firstWord === "بادئة" || firstWord === "prefix") && senderID === adminID) {
-        if (!newPrefix) return api.sendMessage("⚠️ يرجى كتابة البادئة الجديدة بعد الكلمة.\nمثال: بادئة #", threadID, messageID);
-        
-        threadSetting["PREFIX"] = newPrefix;
-        await Threads.setData(threadID, { data: threadSetting });
-        global.data.threadData.set(threadID, threadSetting);
+      if (firstWord === "prefix" || firstWord === "بادئة") {
+        if (senderID === adminID) {
+          let newPrefix = argsPrefix[0];
+          
+          if (!newPrefix || newPrefix.toLowerCase() === "off") {
+            newPrefix = ""; 
+          }
 
-        const botID = api.getCurrentUserID();
-        api.changeNickname(`[ ${newPrefix} ] • ${global.config.BOTNAME || "كايـࢪوس"}`, threadID, botID);
+          threadSetting["PREFIX"] = newPrefix;
+          await Threads.setData(threadID, { data: threadSetting });
+          global.data.threadData.set(threadID, threadSetting);
 
-        return api.sendMessage(`✅ تم تغيير البادئة إلى: [ ${newPrefix} ]\nتم تحديث كنية البوت وإجبار التعامل مع الرمز الجديد.`, threadID, messageID);
-      }
+          const botID = api.getCurrentUserID();
+          const nickName = newPrefix === "" ? "[ No Prefix ] " + (global.config.BOTNAME || "") : "[ " + newPrefix + " ] " + (global.config.BOTNAME || "");
+          api.changeNickname(nickName, threadID, botID);
 
-      // للمستخدم العادي: عرض البادئة فقط
-      if ((firstWord === "بادئة" || firstWord === "prefix") && !body.startsWith(prefix)) {
-        return api.sendMessage(`⦿ البادئة الحالية لهذه المجموعة هي: [ ${prefix} ]`, threadID, messageID);
+          return api.sendMessage("تم تغيير البادئة وحفظها: " + (newPrefix === "" ? "بدون بادئة" : newPrefix), threadID, messageID);
+        } else {
+          return api.sendMessage("البادئة الحالية للمجموعة: " + (prefix === "" ? "بدون بادئة" : prefix) + "\nبادئة النظام الاساسية: " + global.config.PREFIX, threadID, messageID);
+        }
       }
     }
-    // --- [ نهاية منطق البادئة المدمج ] ---
 
     const prefixRegex = new RegExp(`^(<@!?${senderID}>|${escapeRegex(prefix)})\\s*`);
     if (!body) return;
@@ -66,6 +67,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     
     if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
     
+    /* منطق التفاعل في حال عدم وجود امر */
     if (!command) {
       var allCommandName = [];
       const commandValues = commands.keys();
@@ -75,6 +77,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
       if (checker.bestMatch.rating >= 0.8) {
         command = commands.get(checker.bestMatch.target);
       } else {
+        // إعادة تفاعل القرد كما طلبت
         return api.setMessageReaction("🦧", messageID, (err) => {}, true);
       }
     }
@@ -83,10 +86,10 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
       if (!ADMINBOT.includes(senderID) && senderID !== adminID) {
         if (userBanned.has(senderID)) {
           const { reason, dateAdded } = userBanned.get(senderID) || {};
-          return api.sendMessage(global.getText("handleCommand", "userBanned", reason, dateAdded), threadID);
+          return api.sendMessage("تم حظرك\nالسبب: " + reason, threadID);
         } else if (threadBanned.has(threadID)) {
           const { reason, dateAdded } = threadBanned.get(threadID) || {};
-          return api.sendMessage(global.getText("handleCommand", "threadBanned", reason, dateAdded), threadID);
+          return api.sendMessage("تم حظر المجموعة\nالسبب: " + reason, threadID);
         }
       }
     }
@@ -96,9 +99,9 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         const banThreads = commandBanned.get(threadID) || [];
         const banUsers = commandBanned.get(senderID) || [];
         if (banThreads.includes(command.config.name)) {
-          return api.sendMessage(global.getText("handleCommand", "commandThreadBanned", command.config.name), threadID);
+          return api.sendMessage("الامر محظور هنا: " + command.config.name, threadID);
         } else if (banUsers.includes(command.config.name)) {
-          return api.sendMessage(global.getText("handleCommand", "commandUserBanned", command.config.name), threadID);
+          return api.sendMessage("انت محظور من هذا الامر: " + command.config.name, threadID);
         }
       }
     }
@@ -106,7 +109,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     if (command.config.commandCategory.toLowerCase() == "nsfw" &&
       !global.data.threadAllowNSFW.includes(threadID) &&
       !ADMINBOT.includes(senderID)) {
-      return api.sendMessage(global.getText("handleCommand", "threadNotAllowNSFW"), threadID);
+      return api.sendMessage("المجموعة لا تدعم محتوى NSFW", threadID);
     }
 
     var permssion = 0;
@@ -116,7 +119,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     else if (find) permssion = 1;
 
     if (command.config.hasPermssion > permssion) {
-      return api.sendMessage(global.getText("handleCommand", "permssionNotEnough", command.config.name), event.threadID);
+      return api.sendMessage("صلاحياتك لا تسمح باستخدام: " + command.config.name, event.threadID);
     }
 
     if (!client.cooldowns.has(command.config.name)) {
@@ -148,11 +151,11 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
       command.run(Obj);
       timestamps.set(senderID, dateNow);
       if (DeveloperMode) {
-        logger(global.getText("handleCommand", "executeCommand", time, commandName, senderID, threadID, args.join(" "), Date.now() - dateNow), "[ DEV MODE ]");
+        logger("تنفيذ: " + commandName, "[ DEV MODE ]");
       }
       return;
     } catch (e) {
-      return api.sendMessage(global.getText("handleCommand", "commandError", commandName, e), threadID);
+      return api.sendMessage("خطأ في تنفيذ " + commandName + ": " + e, threadID);
     }
   };
 };
