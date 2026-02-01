@@ -1,9 +1,9 @@
 module.exports.config = {
   name: "اوامر",
-  version: "1.2.0",
+  version: "1.3.5",
   hasPermssion: 0,
   credits: "ᎠᎯᏁᎢᎬ ᏚᎮᎯᏒᎠᎯ",
-  description: "قائمة الأوامر بالاستايل الملكي مع فلترة المطور",
+  description: "قائمة الأوامر الملكية - صفحتين - فلترة ودمج ذكي",
   commandCategory: "نظام",
   usages: "[رقم الصفحة]",
   cooldowns: 5,
@@ -25,11 +25,7 @@ module.exports.languages = {
 module.exports.run = async function({ api, event, args, getText }) {
   const axios = require("axios");
   const { commands } = global.client;
-  const { threadID, messageID, senderID } = event;
-
-  // معرف المطور الخاص بك للفلترة
-  const devID = "61581906898524";
-  const isDeveloper = (senderID == devID);
+  const { threadID, messageID } = event;
 
   const image = (await axios.get(
     "https://i.ibb.co/Vcsqzf4T/22ed4e077eadba33e9b9f78a64317ab9.jpg",
@@ -41,15 +37,31 @@ module.exports.run = async function({ api, event, args, getText }) {
   const prefix = threadSetting.PREFIX || global.config.PREFIX;
 
   if (!command) {
-    const categories = {};
+    let categories = {};
+    let miscCommands = [];
+
+    // 1. تجميع الأوامر وفلترة قسم المطور نهائياً
     for (let [name, value] of commands) {
-      // إخفاء أوامر المطور عن الغرباء
-      if (value.config.commandCategory === "مطور" && !isDeveloper) continue;
+      const config = value.config;
+      const cat = config.commandCategory || "عام";
+
+      // تجاهل فئة المطور تماماً للجميع
+      if (cat.toLowerCase().includes("مطور") || cat.toLowerCase().includes("dev")) continue;
       
-      const cat = value.config.commandCategory || "عام";
       if (!categories[cat]) categories[cat] = [];
       categories[cat].push(name);
     }
+
+    // 2. منطق الدمج للفئات التي تحتوي على أمرين أو أقل
+    let finalCategories = {};
+    for (let cat in categories) {
+      if (categories[cat].length <= 2) {
+        miscCommands.push(...categories[cat]);
+      } else {
+        finalCategories[cat] = categories[cat];
+      }
+    }
+    if (miscCommands.length > 0) finalCategories["أوامر متنوعة"] = miscCommands;
 
     const categoryMap = {
       "نظام": "⚙️ ¦ الـنـظـام",
@@ -57,15 +69,16 @@ module.exports.run = async function({ api, event, args, getText }) {
       "اقتصاد": "💰 ¦ الاقـتـصـاد",
       "العاب": "🎮 ¦ الألـعـاب",
       "ذكاء صناعي": "🤖 ¦ الـذكاء الاصطناعي",
-      "مطور": "🛠️ ¦ المطور",
+      "أوامر متنوعة": "✨ ¦ مـتـنـوعـات",
       "عام": "📌 ¦ عــــام"
     };
 
     let blocks = [];
     let count = 0;
 
-    for (let cat in categories) {
-      const cmds = categories[cat].sort();
+    // 3. بناء كتل الأقسام
+    for (let cat in finalCategories) {
+      const cmds = finalCategories[cat].sort();
       let block = `📂 الـقـسـم: ${categoryMap[cat] || cat}\n──────────────\n`;
 
       for (let i = 0; i < cmds.length; i += 3) {
@@ -76,21 +89,24 @@ module.exports.run = async function({ api, event, args, getText }) {
       blocks.push(block.trim());
     }
 
-    const totalPages = 3; // تثبيت عدد الصفحات على 3
+    // 4. تقسيم الأوامر على صفحتين فقط
+    const totalPages = 2;
     const perPage = Math.ceil(blocks.length / totalPages);
     const page = parseInt(args[0]) || 1;
 
     if (page < 1 || page > totalPages)
-      return api.sendMessage(`⚠️ اختر صفحة بين 1 و ${totalPages}`, threadID, messageID);
+      return api.sendMessage(`⚠️ القائمة تتكون من ${totalPages} صفحات فقط. اختر صفحة صحيحة.`, threadID, messageID);
 
     const start = (page - 1) * perPage;
-    const finalBlocks = blocks.slice(start, start + perPage).join("\n\n");
+    const end = start + perPage;
+    const finalBlocks = blocks.slice(start, end).join("\n\n");
 
     const msg = `⌬ ───「 ᎠᎯᏁᎢᎬ ᏚᎮᎯᏒᎠᎯ 」─── ⌬\n\n${finalBlocks}\n\n──────────────\n📊 الأوامر: [ ${count} ]  |  📑 الصفحة: [ ${page} / ${totalPages} ]\n💡 استخدم: ${prefix}اوامر [اسم الأمر] للتفاصيل\nاللهم صلِّ وسلم على سيدنا محمد 🍂🤍`;
 
     return api.sendMessage({ body: msg, attachment: image }, threadID);
   }
 
+  // 5. عرض تفاصيل أمر محدد
   return api.sendMessage(
     getText(
       "moduleInfo",
