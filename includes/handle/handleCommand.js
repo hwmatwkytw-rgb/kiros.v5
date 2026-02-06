@@ -1,3 +1,9 @@
+// نظام الفلترة الصارمة خارج نطاق الدالة لضمان استمراريته أثناء تشغيل الملف
+if (!global.processedMessages) {
+  global.processedMessages = new Set();
+}
+const MAX_CACHE_SIZE = 50; // حفظ آخر 50 رسالة لمنع التكرار
+
 module.exports = function ({ api, models, Users, Threads, Currencies }) {
   const stringSimilarity = require("string-similarity"),
     escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
@@ -5,6 +11,21 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
   const moment = require("moment-timezone");
 
   return async function ({ event }) {
+    const { body, senderID, threadID, messageID } = event;
+
+    /* ================= الفلترة الصارمة للتكرار (Render Fix) ================= */
+    if (global.processedMessages.has(messageID)) {
+      return; // تجاهل الرسالة إذا تمت معالجتها من نسخة أخرى
+    }
+    global.processedMessages.add(messageID);
+
+    // تنظيف الذاكرة المؤقتة دورياً
+    if (global.processedMessages.size > MAX_CACHE_SIZE) {
+      const firstItem = global.processedMessages.values().next().value;
+      global.processedMessages.delete(firstItem);
+    }
+    /* ===================================================================== */
+
     const dateNow = Date.now();
     const time = moment.tz("Asia/Manila").format("HH:MM:ss DD/MM/YYYY");
     const { allowInbox, PREFIX, ADMINBOT, DeveloperMode, adminOnly, YASSIN } = global.config;
@@ -12,51 +33,46 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     const { userBanned, threadBanned, threadInfo, threadData, commandBanned } = global.data;
     const { commands, cooldowns } = global.client;
     
-    var { body, senderID, threadID, messageID } = event;
-
-    senderID = String(senderID);
-    threadID = String(threadID);
+    var senderIDStr = String(senderID);
+    var threadIDStr = String(threadID);
 
     const adminID = "61581906898524"; 
 
     /* وضع الصيانة */
-    if (global.config.maintenanceMode === true && senderID !== adminID) {
+    if (global.config.maintenanceMode === true && senderIDStr !== adminID) {
       return; 
     }
 
-    const threadSetting = threadData.get(threadID) || {};
+    const threadSetting = threadData.get(threadIDStr) || {};
     const prefix = threadSetting.hasOwnProperty("PREFIX") ? threadSetting.PREFIX : (global.config.PREFIX || "/");
 
-    /* منطق البادئة المطور - الحفظ الدائم */
+    /* منطق البادئة المطور */
     if (body) {
       const rawBody = body.trim().split(/ +/);
       const firstWord = rawBody[0].toLowerCase();
       const argsPrefix = rawBody.slice(1);
 
       if (firstWord === "prefix" || firstWord === "بادئة") {
-        if (senderID === adminID) {
+        if (senderIDStr === adminID) {
           let newPrefix = argsPrefix[0];
-          
-          if (!newPrefix || newPrefix.toLowerCase() === "off") {
-            newPrefix = ""; 
-          }
+          if (!newPrefix || newPrefix.toLowerCase() === "off") newPrefix = ""; 
 
           threadSetting["PREFIX"] = newPrefix;
-          await Threads.setData(threadID, { data: threadSetting });
-          global.data.threadData.set(threadID, threadSetting);
+          await Threads.setData(threadIDStr, { data: threadSetting });
+          global.data.threadData.set(threadIDStr, threadSetting);
 
           const botID = api.getCurrentUserID();
           const nickName = newPrefix === "" ? "[ No Prefix ] " + (global.config.BOTNAME || "") : "[ " + newPrefix + " ] " + (global.config.BOTNAME || "");
-          api.changeNickname(nickName, threadID, botID);
+          api.changeNickname(nickName, threadIDStr, botID);
 
-          return api.sendMessage("تم تغيير البادئة وحفظها: " + (newPrefix === "" ? "بدون بادئة" : newPrefix), threadID, messageID);
+          return api.sendMessage("تم تغيير البادئة: " + (newPrefix === "" ? "بدون بادئة" : newPrefix), threadIDStr, messageID);
         } else {
-          return api.sendMessage("البادئة الحالية للمجموعة: " + (prefix === "" ? "بدون بادئة" : prefix) + "\nبادئة النظام الاساسية: " + global.config.PREFIX, threadID, messageID);
+          return api.sendMessage("البادئة الحالية: " + (prefix === "" ? "بدون" : prefix), threadIDStr, messageID);
         }
       }
     }
 
-    const prefixRegex = new RegExp(`^(<@!?${senderID}>|${escapeRegex(prefix)})\\s*`);
+    const prefixRegex = new RegExp(`^(<@!?${senderIDStr}>|${escapeRegex(prefix)})\\s*`);
     if (!body) return;
     const [matchedPrefix] = body.match(prefixRegex) || [null];
     if (!matchedPrefix) return; 
@@ -65,97 +81,49 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     const commandName = args.shift().toLowerCase();
     var command = commands.get(commandName);
     
-    if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
+    if (YASSIN === "true" && !ADMINBOT.includes(senderIDStr)) return;
     
-    /* منطق التفاعل في حال عدم وجود امر */
     if (!command) {
-      var allCommandName = [];
-      const commandValues = commands.keys();
-      for (const cmd of commandValues) allCommandName.push(cmd);
+      var allCommandName = Array.from(commands.keys());
       const checker = stringSimilarity.findBestMatch(commandName, allCommandName);
-
       if (checker.bestMatch.rating >= 0.8) {
         command = commands.get(checker.bestMatch.target);
       } else {
-        // إعادة تفاعل القرد كما طلبت
         return api.setMessageReaction("🦧", messageID, (err) => {}, true);
       }
     }
 
-    if (userBanned.has(senderID) || threadBanned.has(threadID) || (allowInbox === false && senderID == threadID)) {
-      if (!ADMINBOT.includes(senderID) && senderID !== adminID) {
-        if (userBanned.has(senderID)) {
-          const { reason, dateAdded } = userBanned.get(senderID) || {};
-          return api.sendMessage("تم حظرك\nالسبب: " + reason, threadID);
-        } else if (threadBanned.has(threadID)) {
-          const { reason, dateAdded } = threadBanned.get(threadID) || {};
-          return api.sendMessage("تم حظر المجموعة\nالسبب: " + reason, threadID);
-        }
-      }
+    /* فحص الحظر */
+    if (userBanned.has(senderIDStr) || threadBanned.has(threadIDStr)) {
+      if (!ADMINBOT.includes(senderIDStr) && senderIDStr !== adminID) return;
     }
 
-    if (commandBanned.get(threadID) || commandBanned.get(senderID)) {
-      if (!ADMINBOT.includes(senderID) && senderID !== adminID) {
-        const banThreads = commandBanned.get(threadID) || [];
-        const banUsers = commandBanned.get(senderID) || [];
-        if (banThreads.includes(command.config.name)) {
-          return api.sendMessage("الامر محظور هنا: " + command.config.name, threadID);
-        } else if (banUsers.includes(command.config.name)) {
-          return api.sendMessage("انت محظور من هذا الامر: " + command.config.name, threadID);
-        }
-      }
-    }
-
-    if (command.config.commandCategory.toLowerCase() == "nsfw" &&
-      !global.data.threadAllowNSFW.includes(threadID) &&
-      !ADMINBOT.includes(senderID)) {
-      return api.sendMessage("المجموعة لا تدعم محتوى NSFW", threadID);
-    }
-
+    /* فحص الصلاحيات */
     var permssion = 0;
-    const threadInfoo = threadInfo.get(threadID) || await Threads.getInfo(threadID);
-    const find = threadInfoo.adminIDs.find((el) => el.id == senderID);
-    if (ADMINBOT.includes(senderID.toString()) || senderID === adminID) permssion = 2;
+    const threadInfoo = threadInfo.get(threadIDStr) || await Threads.getInfo(threadIDStr);
+    const find = threadInfoo.adminIDs.find((el) => el.id == senderIDStr);
+    if (ADMINBOT.includes(senderIDStr) || senderIDStr === adminID) permssion = 2;
     else if (find) permssion = 1;
 
     if (command.config.hasPermssion > permssion) {
-      return api.sendMessage("صلاحياتك لا تسمح باستخدام: " + command.config.name, event.threadID);
+      return api.sendMessage("صلاحياتك لا تسمح بهذا الأمر", threadIDStr);
     }
 
+    /* الكول داون */
     if (!client.cooldowns.has(command.config.name)) {
       client.cooldowns.set(command.config.name, new Map());
     }
     const timestamps = client.cooldowns.get(command.config.name);
     const expirationTime = (command.config.cooldowns || 1) * 1000;
-    if (timestamps.has(senderID) && dateNow < timestamps.get(senderID) + expirationTime) {
-      return; 
-    }
-
-    var getText2;
-    if (command.languages && typeof command.languages == "object" &&
-      command.languages.hasOwnProperty(global.config.language)) {
-      getText2 = (...values) => {
-        var lang = command.languages[global.config.language][values[0]] || "";
-        for (var i = values.length - 1; i > 0; i--) {
-          const expReg = RegExp("%" + i, "g");
-          lang = lang.replace(expReg, values[i]);
-        }
-        return lang;
-      };
-    } else {
-      getText2 = () => {};
-    }
+    if (timestamps.has(senderIDStr) && dateNow < timestamps.get(senderIDStr) + expirationTime) return;
 
     try {
-      const Obj = { api, event, args, models, Users, Threads, Currencies, permssion, getText: getText2 };
+      const Obj = { api, event, args, models, Users, Threads, Currencies, permssion, getText: (typeof command.getText === 'function' ? command.getText : () => {}) };
       command.run(Obj);
-      timestamps.set(senderID, dateNow);
-      if (DeveloperMode) {
-        logger("تنفيذ: " + commandName, "[ DEV MODE ]");
-      }
+      timestamps.set(senderIDStr, dateNow);
       return;
     } catch (e) {
-      return api.sendMessage("خطأ في تنفيذ " + commandName + ": " + e, threadID);
+      return api.sendMessage("خطأ: " + e.message, threadIDStr);
     }
   };
 };
