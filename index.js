@@ -1,82 +1,44 @@
 const { spawn } = require("child_process");
-const { readFileSync } = require("fs-extra");
 const http = require("http");
-const axios = require("axios");
-const semver = require("semver");
-const logger = require("./utils/log");
 const express = require("express");
 const path = require("path");
 const chalk = require("chalk");
 const chalk1 = require("chalkercli");
 const CFonts = require("cfonts");
 const moment = require("moment-timezone");
+const logger = require("./utils/log");
 
 const app = express();
-// إضافة هذه السطر لقراءة البيانات القادمة من فيسبوك
-app.use(express.json());
-
 const PORT = process.env.PORT || 2006;
 
-// الوقت والتاريخ
-const timeNow = moment.tz("Asia/Ho_Chi_Minh").format("HH:mm:ss || D/MM/YYYY");
-let dayName = moment.tz("Asia/Ho_Chi_Minh").format("dddd");
+// --- نظام منع التكرار (Lock System) ---
+let isBotRunning = false; 
 
-// تعريب الأيام
-const days = {
-  Sunday: "🌞 الأحد",
-  Monday: "🌙 الإثنين",
-  Tuesday: "🔥 الثلاثاء",
-  Wednesday: "💧 الأربعاء",
-  Thursday: "🌈 الخميس",
-  Friday: "🎉 الجمعة",
-  Saturday: "⭐ السبت"
-};
-dayName = days[dayName] || dayName;
-
-// --- حل مشكلة تكرار الرسائل في Render ---
-// هذا المسار يستقبل إشارات فيسبوك ويرد عليها فوراً بـ 200 لمنع التكرار
-app.post("/", (req, res) => {
-  res.status(200).send('EVENT_RECEIVED');
-});
-
-// صفحة الويب والتحقق من الـ Webhook
 app.get("/", (req, res) => {
-  // كود التحقق (Verify Token) المطلوب من فيسبوك عند الربط لأول مرة
-  const verifyToken = "SAIKO"; // يمكنك تغييره حسب إعداداتك في Meta Developers
-  if (req.query['hub.verify_token'] === verifyToken) {
-    return res.send(req.query['hub.challenge']);
-  }
-  res.sendFile(path.join(__dirname, "/index.html"));
+  res.status(200).send("SAIKO BOT IS ALIVE 🚀");
 });
 
+// تشغيل السيرفر قبل البوت لضمان استجابة Render
 app.listen(PORT, () => {
-    logger(`Server is running on port: ${PORT}`, "SYSTEM");
+  console.log(chalk.cyan(`[ SERVER ] Listening on Port: ${PORT}`));
 });
 
-// واجهة البداية
-CFonts.say("SAIKO", {
-  font: "block",
-  align: "center",
-  gradient: ["red", "magenta"]
-});
+const timeNow = moment.tz("Asia/Ho_Chi_Minh").format("HH:mm:ss || D/MM/YYYY");
 
-CFonts.say("Bot Messenger Powered By SAIKO 🚀", {
-  font: "simple",
-  align: "center",
-  gradient: ["cyan", "blue"]
-});
+CFonts.say("SAIKO", { font: "block", align: "center", gradient: ["red", "magenta"] });
 
-console.log(
-  chalk1.cyanBright(
-    `\n🎉 SAIKO BOT READY AT ${timeNow}\n📅 ${dayName}\n`
-  )
-);
-
-// تشغيل البوت
 function startBot(message) {
-  if (message) {
-    logger(chalk.green(message), "SYSTEM");
+  // إذا كان البوت يعمل بالفعل، نمنع التشغيل المتكرر
+  if (isBotRunning) {
+    console.log(chalk.red("⚠️ محاولة تشغيل نسخة مكررة! تم منع العملية."));
+    return;
   }
+
+  if (message) {
+    logger(chalk1.green(message), "SYSTEM");
+  }
+
+  isBotRunning = true;
 
   const bot = spawn(
     "node",
@@ -88,28 +50,26 @@ function startBot(message) {
     }
   );
 
-  bot.on("close", async (code) => {
-    if (code === 1) {
-      console.log(chalk.yellow("🔄 Rebooting bot..."));
-      startBot("Bot restarted");
-    } else if (!isNaN(code)) {
-      await new Promise((r) => setTimeout(r, code * 1000));
-      startBot("Bot relaunched after delay");
-    }
+  bot.on("close", (code) => {
+    isBotRunning = false; // تحرير القفل عند إغلاق البوت
+    
+    // تأخير إعادة التشغيل لمنع الـ Spam في Render
+    const delay = 10000; 
+    console.log(chalk.yellow(`🔄 تم إغلاق العملية (Code: ${code}). إعادة التشغيل خلال ${delay/1000} ثوانٍ...`));
+    
+    setTimeout(() => {
+      startBot("إعادة تشغيل الجلسة...");
+    }, delay);
   });
 
   bot.on("error", (err) => {
-    logger(chalk.red("⚠️ Bot crashed: ") + err, "ERROR");
+    isBotRunning = false;
+    logger(chalk.red("⚠️ خطأ في المحرك: ") + err, "ERROR");
   });
 }
 
-// فحص تحديث (غير إجباري)
-axios
-  .get("https://raw.githubusercontent.com/tandung1/Bot12/main/package.json")
-  .catch(() => {});
-
-// بدء التشغيل
+// تشغيل البوت
 setTimeout(() => {
   console.log(chalk.green("🚀 Launching SAIKO BOT...\n"));
   startBot("SAIKO POWER-UP ⚡");
-}, 70);
+}, 1000);
