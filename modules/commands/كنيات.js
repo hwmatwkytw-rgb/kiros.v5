@@ -1,9 +1,9 @@
 module.exports.config = {
   name: "كنيات",
-  version: "1.1.0",
+  version: "2.0.0",
   hasPermssion: 2,
   credits: "Gemini",
-  description: "تعيين كنية موحدة لـ 250 عضو مع استبدال كلمة اسم بالاسم الأول",
+  description: "تغيير كنيات الأعضاء بسرعة مع تقارير مرحلية",
   commandCategory: "المطور",
   usages: "[الكنية تحتوي على كلمة اسم]",
   cooldowns: 20
@@ -19,45 +19,57 @@ module.exports.run = async function({ api, event, args }) {
 
   const format = args.join(" ");
   if (!format || !format.includes("اسم")) {
-    return api.sendMessage("⚠️ يرجى كتابة التنسيق المطلوب مع كلمة 'اسم'.\nمثال: كنيات [اسم] ملك البوت", threadID, messageID);
+    return api.sendMessage("⚠️ يرجى كتابة التنسيق المطلوب.\nمثال: كنيات الفخم اسم", threadID, messageID);
   }
 
   try {
     const threadInfo = await api.getThreadInfo(threadID);
-    // جلب أول 250 عضو فقط
     const userIDs = threadInfo.participantIDs.slice(0, 250);
     let successCount = 0;
 
-    api.sendMessage(`⏳ جاري بدء العملية لـ ${userIDs.length} عضو...\n⚠️ سيتم تغيير كنية كل عضو بفاصل زمني لتجنب الحظر.`, threadID);
+    // التفاعل بانتظار
+    api.setMessageReaction("⌚", messageID, () => {}, true);
+    api.sendMessage(`🚀 بدأت العملية لـ ${userIDs.length} عضو...\nسأقوم بإعلامك كل 50 كنية.`, threadID);
 
-    for (let id of userIDs) {
+    // دالة لتغيير الكنية مع معالجة الأخطاء
+    const changeName = async (id) => {
       try {
         const userInfo = await api.getUserInfo(id);
-        const fullName = userInfo[id].name;
-        const firstName = fullName.split(" ")[0];
-
-        // استبدال كلمة "اسم" بأقواسها بالاسم الأول
+        const firstName = userInfo[id].name.split(" ")[0] || "User";
         const newNickname = format.replace(/[\(\[\{\<\«]*اسم[\)\}\]\>\»]*/g, firstName);
-
-        // تنفيذ التغيير
-        await new Promise(resolve => {
-          api.changeNickname(newNickname, threadID, id, () => {
-            successCount++;
+        
+        return new Promise((resolve) => {
+          api.changeNickname(newNickname, threadID, id, (err) => {
+            if (!err) successCount++;
             resolve();
           });
         });
-
-        // فاصل زمني بسيط (1.5 ثانية) بين كل عضو لتجنب السبام
-        await new Promise(res => setTimeout(res, 1500));
-        
-      } catch (err) {
-        console.error("فشل تغيير كنية العضو: " + id);
+      } catch (e) {
+        return Promise.resolve();
       }
+    };
+
+    // معالجة المجموعات (سرعة أعلى)
+    for (let i = 0; i < userIDs.length; i += 5) {
+      const batch = userIDs.slice(i, i + 5);
+      await Promise.all(batch.map(id => changeName(id)));
+      
+      // إرسال حالة العملية كل 50 عضو
+      if ((i + 5) % 50 === 0 || (i + 5) >= userIDs.length) {
+          const progress = Math.min(i + 5, userIDs.length);
+          api.sendMessage(`🔄 حالة التحديث: تم معالجة ${progress}/${userIDs.length} عضو...`, threadID);
+      }
+
+      // فاصل زمني بسيط بين المجموعات لتفادي الحظر
+      await new Promise(res => setTimeout(res, 2000));
     }
 
-    return api.sendMessage(`✅ اكتملت العملية!\n🔹 تم تغيير: ${successCount} كنية.\n🔹 التنسيق المستخدم: ${format}`, threadID, messageID);
+    // التفاعل عند الانتهاء
+    api.setMessageReaction("✅", messageID, () => {}, true);
+    return api.sendMessage(`✅ اكتملت المهمة بنجاح!\n🔹 تم تغيير: ${successCount} كنية.\n🔹 التنسيق: ${format}`, threadID, messageID);
 
   } catch (e) {
-    return api.sendMessage("❌ حدث خطأ في النظام: " + e.message, threadID, messageID);
+    console.error(e);
+    return api.sendMessage("❌ خطأ في النظام: " + e.message, threadID, messageID);
   }
 };
