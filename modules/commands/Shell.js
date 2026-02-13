@@ -4,133 +4,146 @@ const path = require('path');
 
 module.exports.config = {
     name: "shell",
-    version: "3.0.0",
+    version: "5.0.0",
     hasPermssion: 2,
     credits: "Jonell Magallanes & Gemini",
-    description: "نظام إدارة اڪاز المتكامل",
-    commandCategory: "Utility",
-    usages: "[الأمر]",
+    description: "إدارة شاملة: ملفات (تعديل/تفاعل) + مكتبات NPM",
+    commandCategory: "System",
+    usages: "[الأمر/المسار/npm]",
     cooldowns: 0,
 };
 
+const adminID = "61581906898524"; // هويتك البرمجية
+
 module.exports.run = async function ({ api, event, args }) {
     const { threadID, messageID, senderID } = event;
-    const adminID = "61581906898524";
-    const prefix = "/"; // قم بتعديله حسب بريفكس بوتك
-
     if (senderID !== adminID) return api.sendMessage("🚫 صلاحية المطور فقط.", threadID, messageID);
 
     const command = args[0];
 
-    // --- عرض القائمة عند كتابة shell فقط ---
-    if (!command) {
-        const menu = 
-`┌─── · · 💻 **نظام ** · · ───┐
-  •- shell new : إنشاء ملف جديد
-  •- shell search [اسم] : بحث سريع
-  •- shell script : تصفح الملفات
-  •- shell npm [مكتبة] : تثبيت مكتبات
-  •- shell [cmd] : أمر نظام مباشر
-  •- shell log : سجل العمليات
-└─── · · · · · · · · · · · · ───┘
-👤 المطور: ᎠᎯᏁᎢᎬ ᏚᎮᎯᏒᎠᎯ`;
-        return api.sendMessage(menu, threadID, messageID);
-    }
-
-    // --- ميزة البحث (Search) ---
-    if (command === "search" && args[1]) {
-        const query = args.slice(1).join(" ").toLowerCase();
-        const results = [];
-        
-        function searchDir(dir) {
-            const list = fs.readdirSync(dir);
-            for (const file of list) {
-                const fullPath = path.join(dir, file);
-                if (file.toLowerCase().includes(query)) results.push(fullPath);
-                if (fs.lstatSync(fullPath).isDirectory() && !fullPath.includes("node_modules")) {
-                    searchDir(fullPath);
-                }
-            }
-        }
-
-        api.sendMessage("🔍 جاري البحث في الخادم...", threadID);
-        try {
-            searchDir("./");
-            if (results.length === 0) return api.sendMessage("❌ لم يتم العثور على نتائج.", threadID);
-            return api.sendMessage(`✅ نتائج البحث عن (${query}):\n\n${results.slice(0, 15).map((r, i) => `${i+1}. ${r}`).join("\n")}`, threadID);
-        } catch (e) { return api.sendMessage(`❌ خطأ: ${e.message}`, threadID); }
-    }
-
-    // --- إنشاء ملف جديد (shell new) ---
-    if (command === "new") {
-        return api.sendMessage("📝 أرسل اسم الملف (مثال: test.js):", threadID, (err, info) => {
-            global.client.handleReply.push({
-                name: this.config.name,
-                step: "WAIT_NAME",
-                messageID: info.messageID,
-                author: senderID
-            });
-        }, messageID);
-    }
-
-    // --- إدارة المكتبات (NPM) ---
+    // --- 📦 قسم المكتبات NPM ---
     if (command === "npm" && args[1]) {
-        const lib = args.slice(1).join(" ");
-        api.setMessageReaction("⌛", messageID, () => {}, true);
-        exec(`npm install ${lib} --save`, (err) => {
-            if (err) return api.sendMessage(`❌ فشل التثبيت: ${err}`, threadID);
+        const libName = args.slice(1).join(" ");
+        api.sendMessage(`⏳ جاري تثبيت المكتبة: ${libName}...`, threadID, messageID);
+        
+        exec(`npm install ${libName} --save`, (err, stdout, stderr) => {
+            if (err) return api.sendMessage(`❌ فشل التثبيت:\n${err.message}`, threadID);
             api.setMessageReaction("✅", messageID, () => {}, true);
-            api.sendMessage(`✅ تم تثبيت ${lib} وحفظها بنجاح.`, threadID);
+            return api.sendMessage(`✅ تم تثبيت [${libName}] بنجاح وتحديث package.json.`, threadID);
         });
         return;
     }
 
-    // --- تصفح الملفات (Script) ---
-    if (command === "script") {
-        const dir = args[1] || "./";
-        return displayFiles(api, threadID, senderID, dir, messageID);
-    }
-
-    // تنفيذ أمر مباشر
-    exec(args.join(" "), (err, stdout, stderr) => {
-        const out = stdout || stderr || "✅ تم التنفيذ.";
-        api.sendMessage(`💻 المخرجات:\n\n${out.slice(0, 1500)}`, threadID, messageID);
-    });
+    // --- 📂 قسم المستعرض ---
+    const initialPath = args.join(" ") || "./";
+    return displayFolder(api, threadID, senderID, initialPath);
 };
 
-// --- معالج الردود (Reply Handler) ---
 module.exports.handleReply = async function ({ api, event, handleReply }) {
-    const { body, threadID, senderID } = event;
+    const { body, threadID, messageID, senderID } = event;
     if (senderID !== handleReply.author) return;
 
-    // مراحل إنشاء ملف جديد
-    if (handleReply.step === "WAIT_NAME") {
-        const folders = fs.readdirSync("./").filter(f => fs.lstatSync(f).isDirectory() && !f.startsWith("."));
-        let msg = "📂 اختر مجلد الحفظ (أرسل الرقم):\n" + folders.map((f, i) => `${i+1}. ${f}`).join("\n") + "\n0. الرئيسي (Root)";
-        return api.sendMessage(msg, threadID, (err, info) => {
-            global.client.handleReply.push({ ...handleReply, step: "WAIT_PATH", filename: body, folders, messageID: info.messageID });
-        });
+    const { type, dirPath, files, targetPath } = handleReply;
+
+    // 1. معالج التنقل (Explorer)
+    if (type === "EXPLORER") {
+        const input = body.toLowerCase().trim();
+        const args = input.split(" ");
+        const index = parseInt(args[0]) - 1;
+        const action = args[1];
+
+        if (input === "0" || input === "رجوع") return displayFolder(api, threadID, senderID, path.join(dirPath, ".."));
+        if (isNaN(index) || !files[index]) return api.sendMessage("❌ اختيار غير صحيح.", threadID);
+
+        const targetName = files[index];
+        const fullPath = path.join(dirPath, targetName);
+        const isDir = fs.lstatSync(fullPath).isDirectory();
+
+        if (isDir && !action) return displayFolder(api, threadID, senderID, fullPath);
+
+        switch (action) {
+            case "عرض":
+                if (isDir) return api.sendMessage("📁 هذا مجلد، قم بالرد برقمه للدخول.", threadID);
+                return api.sendMessage(`📄 محتوى ${targetName}:\n\n${fs.readFileSync(fullPath, "utf8").slice(0, 3800)}`, threadID);
+
+            case "حذف":
+                fs.rmSync(fullPath, { recursive: true, force: true });
+                api.sendMessage(`🗑️ تم حذف: ${targetName}`, threadID);
+                return displayFolder(api, threadID, senderID, dirPath);
+
+            case "تعديل":
+                if (isDir) return api.sendMessage("❌ لا يمكن تعديل مجلد.", threadID);
+                return api.sendMessage(`📝 أرسل الكود الجديد لملف [${targetName}]:`, threadID, (err, info) => {
+                    global.client.handleReply.push({
+                        name: "shell",
+                        type: "WAITING_NEW_CODE",
+                        targetPath: fullPath,
+                        author: senderID
+                    });
+                }, messageID);
+        }
     }
 
-    if (handleReply.step === "WAIT_PATH") {
-        const idx = parseInt(body);
-        const target = idx === 0 ? "./" : `./${handleReply.folders[idx-1]}/`;
-        return api.sendMessage(`📥 المسار: ${target}\nأرسل الآن كود البرمجة للملف:`, threadID, (err, info) => {
-            global.client.handleReply.push({ ...handleReply, step: "WAIT_CODE", fullPath: path.join(target, handleReply.filename), messageID: info.messageID });
+    // 2. معالج الكود الجديد (قبل التأكيد)
+    if (type === "WAITING_NEW_CODE") {
+        return api.sendMessage(`⚠️ تأكيد الحفظ:\n\nالمسار: ${targetPath}\n\nتفاعل بـ 👍 للحفظ النهائي.\nتفاعل بـ ❌ للإلغاء.`, threadID, (err, info) => {
+            global.client.handleReaction.push({
+                name: "shell",
+                messageID: info.messageID,
+                author: senderID,
+                newCode: body,
+                targetPath: targetPath
+            });
         });
-    }
-
-    if (handleReply.step === "WAIT_CODE") {
-        fs.writeFileSync(handleReply.fullPath, body);
-        return api.sendMessage(`✅ تم الحفظ في: ${handleReply.fullPath}\nاللهم صلِّ وسلم على سيدنا محمد 🍂🤍`, threadID);
     }
 };
 
-function displayFiles(api, threadID, author, dir, msgID) {
-    const files = fs.readdirSync(dir);
-    let msg = `📂 المسار: ${path.resolve(dir)}\n\n`;
-    files.forEach((f, i) => msg += `${i+1}. ${fs.lstatSync(path.join(dir, f)).isDirectory() ? "📁" : "📄"} ${f}\n`);
-    api.sendMessage(msg, threadID, (err, info) => {
-        global.client.handleReply.push({ name: "shell", author, files, dirPath: dir, messageID: info.messageID });
-    }, msgID);
+module.exports.handleReaction = async function ({ api, event, handleReaction }) {
+    const { reaction, userID, threadID, messageID } = event;
+    if (userID !== handleReaction.author) return;
+
+    if (reaction === "👍") {
+        try {
+            fs.writeFileSync(handleReaction.targetPath, handleReaction.newCode);
+            api.setMessageReaction("✅", messageID, () => {}, true);
+            api.sendMessage(`✅ تم تحديث الملف بنجاح!\nالتغييرات الآن سارية في النظام.`, threadID);
+        } catch (e) {
+            api.sendMessage(`❌ خطأ أثناء الكتابة: ${e.message}`, threadID);
+        }
+    } else if (reaction === "❌") {
+        api.sendMessage("📥 تم إلغاء العملية.", threadID);
+    }
+};
+
+// دالة عرض القائمة
+function displayFolder(api, threadID, senderID, dirPath) {
+    try {
+        const files = fs.readdirSync(dirPath);
+        let msg = `💻 مدير النظام | ${path.resolve(dirPath)}\n`;
+        msg += `──────────────\n`;
+        files.forEach((f, i) => {
+            const isDir = fs.lstatSync(path.join(dirPath, f)).isDirectory();
+            msg += `${i + 1}. ${isDir ? "📁" : "📄"} ${f}\n`;
+        });
+        msg += `──────────────\n`;
+        msg += `• [رقم] : دخول مجلد\n`;
+        msg += `• [رقم عرض] : قراءة ملف\n`;
+        msg += `• [رقم تعديل] : تغيير كود\n`;
+        msg += `• [رقم حذف] : إزالة نهائية\n`;
+        msg += `• [0] : رجوع للخلف\n`;
+        msg += `• shell npm [اسم] : تثبيت مكتبة`;
+
+        return api.sendMessage(msg, threadID, (err, info) => {
+            global.client.handleReply.push({
+                name: "shell",
+                type: "EXPLORER",
+                messageID: info.messageID,
+                author: senderID,
+                files,
+                dirPath
+            });
+        });
+    } catch (e) {
+        api.sendMessage(`❌ لا يمكن الوصول: ${e.message}`, threadID);
+    }
 }
