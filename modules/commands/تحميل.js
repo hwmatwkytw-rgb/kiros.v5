@@ -1,86 +1,48 @@
-module.exports = {
-  config: {
-    name: "تحميل", // اسم الأمر الذي يكتبه المستخدم
-    version: "1.1.0",
+const fbDownloader = require('fb-downloader-scrapper');
+const axios = require('axios');
+
+module.exports.config = {
+    name: "تحميل",
+    version: "1.0.0",
     hasPermssion: 0,
-    credits: "rX & YUMI",
-    description: "تحميل فيديوهات من اليوتيوب، تيك توك، إنستغرام، وفيسبوك عبر الرابط",
-    commandCategory: "الخدمات",
-    usages: "[الرابط]",
+    credits: "Gemini AI",
+    description: "تحميل فيديوهات فيسبوك بجودة عالية",
+    commandCategory: "Media",
+    usages: "[رابط الفيديو]",
     cooldowns: 5,
-  },
+};
 
-  run: async function ({ api, event, args }) {
-    const axios = require("axios");
-    const fs = require("fs-extra");
-    const { alldown } = require("rx-dawonload");
+module.exports.run = async function ({ api, event, args }) {
+    const { threadID, messageID } = event;
+    const url = args.join(" "); // لضمان قراءة الرابط بالكامل
 
-    // التحقق من وجود رابط بعد كلمة تحميل
-    const content = args.join(" ");
-    if (!content || !content.startsWith("https://")) {
-      return api.sendMessage("❌ يرجى وضع رابط صحيح بعد كلمة 'تحميل'\nمثال: تحميل https://tiktok.com/...", event.threadID, event.messageID);
-    }
+    if (!url) return api.sendMessage("⚠️ أرسل رابط الفيديو بعد كلمة تحميل.", threadID, messageID);
 
-    // معرف الطلب (رقم عشوائي أو معرف الرسالة)
-    const requestId = event.messageID.split("-").pop() || Math.floor(Math.random() * 1000000);
+    const waitMsg = await api.sendMessage("⏳ جاري معالجة الفيديو من فيسبوك...", threadID);
 
     try {
-      // تحديد المنصة
-      let site = "غير معروف";
-      if (content.includes("youtube.com") || content.includes("youtu.be")) site = "YouTube 📺";
-      else if (content.includes("tiktok.com")) site = "TikTok 🎵";
-      else if (content.includes("instagram.com")) site = "Instagram 📸";
-      else if (content.includes("facebook.com")) site = "Facebook 💙";
+        // استخدام المكتبة التي ثبتها بنجاح
+        const result = await fbDownloader(url);
+        const videoUrl = result.hd || result.sd;
 
-      // تفاعل البحث
-      api.setMessageReaction("🔍", event.messageID, () => {}, true);
+        if (!videoUrl) {
+            return api.sendMessage("❌ لم يتم العثور على روابط تحميل. تأكد أن الفيديو 'عام'.", threadID, messageID);
+        }
 
-      // جلب بيانات الفيديو
-      const data = await alldown(content);
-      if (!data || !data.url) {
-        api.setMessageReaction("❌", event.messageID, () => {}, true);
-        return api.sendMessage("⚠️ عذراً، لم أتمكن من جلب هذا الفيديو. تأكد من أن الرابط عام وليس خاصاً.", event.threadID, event.messageID);
-      }
+        // جلب الفيديو كـ Stream لضمان إرساله كملف وليس كرابط فقط
+        const videoStream = await axios.get(videoUrl, { responseType: 'stream' });
 
-      const title = data.title || "بدون عنوان";
-      const videoUrl = data.url;
+        const msg = {
+            body: `✅ تم التحميل بنجاح\n\n📺 الجودة: ${result.hd ? 'HD' : 'SD'}\n👤 المطور: ${module.exports.config.credits}`,
+            attachment: videoStream.data
+        };
 
-      // تفاعل التحميل
-      api.setMessageReaction("⬇️", event.messageID, () => {}, true);
+        api.unsendMessage(waitMsg.messageID);
+        return api.sendMessage(msg, threadID, messageID);
 
-      // تحميل الملف
-      const videoBuffer = (await axios.get(videoUrl, { responseType: "arraybuffer" })).data;
-      const filePath = __dirname + "/cache/" + requestId + ".mp4";
-      fs.writeFileSync(filePath, Buffer.from(videoBuffer, "utf-8"));
-
-      // إرسال الرسالة بالستايل الأنيق
-      const stylishBody = 
-        `✅ تم التحميل بنجاح!\n` +
-        `━━━━━━━━━━━━━━━\n` +
-        `🆔 معرف الطلب: ${requestId}\n` +
-        `📍 المنصة: ${site}\n` +
-        `🎬 العنوان: ${title}\n` +
-        `━━━━━━━━━━━━━━━\n` +
-        `『 ⚙︎ 𝒀𝑼𝑴𝑰  ͡🦋͜  𝑩𝑶𝑻  』في الخدمة`;
-
-      api.sendMessage(
-        {
-          body: stylishBody,
-          attachment: fs.createReadStream(filePath),
-        },
-        event.threadID,
-        (err) => {
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-          if (!err) api.setMessageReaction("✅", event.messageID, () => {}, true);
-          else api.setMessageReaction("❌", event.messageID, () => {}, true);
-        },
-        event.messageID
-      );
-
-    } catch (err) {
-      console.error(err);
-      api.setMessageReaction("❌", event.messageID, () => {}, true);
-      api.sendMessage("حدث خطأ تقني أثناء المحاولة.", event.threadID, event.messageID);
+    } catch (error) {
+        console.error(error);
+        api.unsendMessage(waitMsg.messageID);
+        return api.sendMessage("❌ حدث خطأ أثناء التحميل، قد يكون الفيديو خاص أو الرابط غير صالح.", threadID, messageID);
     }
-  },
 };
