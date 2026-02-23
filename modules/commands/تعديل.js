@@ -1,67 +1,69 @@
 const axios = require('axios');
 const fs = require('fs');
 const { createCanvas, loadImage } = require('canvas');
+const path = require('path');
 
 module.exports.config = {
     name: "تعديل",
-    version: "2.0.0",
+    version: "2.1.0",
     hasPermssion: 0,
-    credits: "Gemini AI",
-    description: "تعديل الصور باحترافية (رد على صورة)",
+    credits: "ڪايࢪوس",
+    description: "محرر صور احترافي (رد على صورة)",
     commandCategory: "الصور",
     usages: "[رد على صورة]",
-    cooldowns: 5,
+    cooldowns: 5
 };
 
 module.exports.run = async function ({ api, event }) {
-    const { threadID, messageID, messageReply } = event;
+    const { threadID, messageID, messageReply, senderID } = event;
 
-    // التأكد من أن المستخدم رد على صورة
+    // التحقق من الرد على صورة
     if (!messageReply || !messageReply.attachments || messageReply.attachments[0].type !== "photo") {
-        return api.sendMessage("⚠️ | عذراً، يجب عليك الرد على (صورة) لتتمكن من تعديلها.", threadID, messageID);
+        return api.sendMessage("╭── • 📥 • ──╮\n  يرجى الرد على صورة\n╰── • 📥 • ──╯", threadID, messageID);
     }
 
     const imgURL = messageReply.attachments[0].url;
     
-    const menu = `╭─── • 🔧 • ───╮\n` +
-                 `  ⌈ مُحرر الـصـور الـمُطور ⌋\n` +
-                 `╰─── • 🔧 • ───╯\n\n` +
-                 `1. [✨] تعلية الجودة (Ultra HD)\n` +
-                 `2. [🎬] فلتر سينمائي (Cinematic)\n` +
-                 `3. [📜] فلتر عتيق (Sepia/Old)\n` +
-                 `4. [🌗] أبيض وأسود (B&W)\n` +
-                 `5. [🌀] تعتيم الخلفية (Blur)\n` +
-                 `6. [⭕] قص دائري (Circle)\n` +
-                 `7. [🎨] تحسين الألوان (Vibrant)\n\n` +
-                 `«— رد بـ رقـم الـتعديـل —»`;
+    const menu = `╭── • ڪايࢪوس • ──╮\n` +
+                 `  ⌈ مُحرر الـصـور الـفـني ⌋\n` +
+                 `╰── • 🎨 • ──╯\n\n` +
+                 `1. [✨] تعلية الجودة (HD)\n` +
+                 `2. [🎬] فلتر سينمائي\n` +
+                 `3. [📜] فلتر عتيق (قديم)\n` +
+                 `4. [🌗] أبيض وأسود\n` +
+                 `5. [🌀] تشويش (Blur)\n` +
+                 `6. [⭕] قص دائري\n` +
+                 `7. [🎨] تحسين الألوان\n\n` +
+                 `* رد على الرسالة برقم التعديل المطلوب`;
 
     return api.sendMessage(menu, threadID, (err, info) => {
         global.client.handleReply.push({
             name: this.config.name,
             messageID: info.messageID,
-            author: event.senderID,
+            author: senderID,
             imgURL: imgURL
         });
     }, messageID);
 };
 
 module.exports.handleReply = async function ({ api, event, handleReply }) {
-    const { threadID, body, senderID, messageID } = event;
+    const { threadID, messageID, body, senderID } = event;
     if (senderID != handleReply.author) return;
 
-    const path = __dirname + `/cache/edit_${senderID}_${Date.now()}.png`;
     const choice = body.trim();
+    const cacheDir = path.join(__dirname, "cache");
+    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
     
-    // التحقق من أن المجلد موجود
-    if (!fs.existsSync(__dirname + '/cache')) fs.mkdirSync(__dirname + '/cache');
-
-    api.sendMessage("⏳ | جاري معالجة صورتك فنيًا...", threadID, messageID);
+    const filePath = path.join(cacheDir, `edit_${Date.now()}.png`);
+    
+    api.unsendMessage(handleReply.messageID);
+    api.sendMessage("⏳ جاري معالجة الصورة فنيًا...", threadID, messageID);
 
     try {
         if (choice === "1") {
-            // تعلية الجودة عبر API خارجي (Upscale)
+            // تعلية الجودة عبر API
             const res = await axios.get(`https://api.vamsi.tk/upscale?url=${encodeURIComponent(handleReply.imgURL)}`, { responseType: 'arraybuffer' });
-            fs.writeFileSync(path, Buffer.from(res.data, 'binary'));
+            fs.writeFileSync(filePath, Buffer.from(res.data, 'binary'));
         } 
         else {
             const image = await loadImage(handleReply.imgURL);
@@ -72,15 +74,13 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
             const data = imgData.data;
 
             switch (choice) {
-                case "2": // سينمائي (تعديل التباين والأزرق)
+                case "2": // سينمائي
                     for (let i = 0; i < data.length; i += 4) {
-                        data[i] *= 1.1;     // Red
-                        data[i + 2] *= 1.3; // Blue
+                        data[i] *= 1.1; data[i + 2] *= 1.3;
                     }
                     ctx.putImageData(imgData, 0, 0);
                     break;
-
-                case "3": // عتيق (Sepia)
+                case "3": // عتيق
                     for (let i = 0; i < data.length; i += 4) {
                         let r = data[i], g = data[i+1], b = data[i+2];
                         data[i] = (r * 0.393) + (g * 0.769) + (b * 0.189);
@@ -89,7 +89,6 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
                     }
                     ctx.putImageData(imgData, 0, 0);
                     break;
-
                 case "4": // أبيض وأسود
                     for (let i = 0; i < data.length; i += 4) {
                         let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
@@ -97,46 +96,36 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
                     }
                     ctx.putImageData(imgData, 0, 0);
                     break;
-
-                case "5": // تشويش (Blur)
+                case "5": // Blur
                     ctx.globalAlpha = 0.5;
                     for (let n = -3; n <= 3; n++) ctx.drawImage(canvas, n, n);
                     ctx.globalAlpha = 1.0;
                     break;
-
-                case "6": // قص دائري
+                case "6": // دائري
                     const size = Math.min(canvas.width, canvas.height);
                     const c2 = createCanvas(size, size);
                     const ctx2 = c2.getContext('2d');
-                    ctx2.beginPath();
-                    ctx2.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-                    ctx2.clip();
-                    ctx2.drawImage(image, (size - image.width) / 2, (size - image.height) / 2);
-                    fs.writeFileSync(path, c2.toBuffer());
+                    ctx2.beginPath(); ctx2.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+                    ctx2.clip(); ctx2.drawImage(image, (size - image.width) / 2, (size - image.height) / 2);
+                    fs.writeFileSync(filePath, c2.toBuffer());
                     break;
-
-                case "7": // تحسين ألوان (Vibrant)
+                case "7": // تحسين ألوان
                     for (let i = 0; i < data.length; i += 4) {
-                        data[i] = Math.min(255, data[i] * 1.2);
-                        data[i+1] = Math.min(255, data[i+1] * 1.2);
-                        data[i+2] = Math.min(255, data[i+2] * 1.2);
+                        data[i] *= 1.2; data[i+1] *= 1.2; data[i+2] *= 1.2;
                     }
                     ctx.putImageData(imgData, 0, 0);
                     break;
-
-                default:
-                    return api.sendMessage("❌ | اختيار غير صائب، يرجى اختيار رقم من القائمة.", threadID, messageID);
+                default: return api.sendMessage("❌ رقم غير صحيح.", threadID, messageID);
             }
-            if (choice !== "6") fs.writeFileSync(path, canvas.toBuffer());
+            if (choice !== "6") fs.writeFileSync(filePath, canvas.toBuffer());
         }
 
-        return api.sendMessage({
-            body: "✨ | إليك الصورة بعد التعديل الفني:",
-            attachment: fs.createReadStream(path)
-        }, threadID, () => fs.unlinkSync(path), messageID);
+        api.sendMessage({
+            body: "✨ تم التعديل بواسطة ڪايࢪوس",
+            attachment: fs.createReadStream(filePath)
+        }, threadID, () => fs.unlinkSync(filePath), messageID);
 
-    } catch (err) {
-        console.error(err);
-        return api.sendMessage("❌ | فشلت المعالجة، قد يكون الرابط منتهي الصلاحية أو المكتبة غير مثبتة.", threadID, messageID);
+    } catch (e) {
+        api.sendMessage("❌ حدث خطأ في المعالجة.", threadID, messageID);
     }
 };
