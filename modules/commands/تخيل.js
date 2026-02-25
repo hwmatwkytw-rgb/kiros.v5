@@ -1,76 +1,44 @@
-const axios = require('axios');
-const fs = require('fs-extra');
-const path = require('path');
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
 
 module.exports.config = {
-    name: "تخيل",
-    version: "1.0",
-    hasPermission: 0,
-    credits: "ǺᎩᎧᏬᏰ",
-    description: "يرسم صور من نص معين مع التحكم في الأسلوب.",
-    commandCategory: "تخيل",
-    usages: "[النص] [رقم الاسلوب] [حجم الصورة (rto)]",
-    cooldowns: 5
+  name: "تخيل",
+  version: "1.1.0",
+  hasPermssion: 0,
+  credits: "ڪايࢪوس",
+  description: "صنع صور بالذكاء الاصطناعي (مجاني وسريع)",
+  commandCategory: "الخدمات",
+  usages: "[وصف الصورة بالعربية]",
+  cooldowns: 5
 };
 
-module.exports.handleEvent = async function ({ api, event }) {
+module.exports.run = async function ({ api, event, args }) {
+  const { threadID, messageID } = event;
+  const prompt = args.join(" ");
 
+  if (!prompt) return api.sendMessage("╭── • 📥 • ──╮\n اكتب وصفاً ليتخيله كايࢪوس\n╰── • 📥 • ──╯", threadID, messageID);
 
-    if (args.length < 2) {
-        api.sendMessage("جرب [ماذا تريد تخيله] [رقم الأسلوب] [حجم الصورة (rto)]", event.threadID, event.messageID);
-        return;
-    }
+  api.setMessageReaction("🎨", messageID, () => {}, true);
 
-    try {
-        const ayoub = args.slice(0, -1).join(" ");
-        const translateURL = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(ayoub)}`;
+  try {
+    // ترجمة الوصف للعربية تلقائياً لضمان دقة الرسم
+    const trRes = await axios.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(prompt)}`);
+    const enPrompt = trRes.data[0][0][0];
 
-        try {
-            const translationResponse = await axios.get(translateURL);
-            const ayoubzx = translationResponse.data[0][0][0];
-            const style = args[args.length - 2];
-            let rto = args[args.length - 1];
+    // API الرسم السريع
+    const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(enPrompt)}?width=1080&height=1080&model=flux`;
+    
+    const cachePath = path.join(__dirname, "cache", `imagine_${Date.now()}.png`);
+    const imgRes = await axios.get(imageUrl, { responseType: "arraybuffer" });
+    fs.writeFileSync(cachePath, Buffer.from(imgRes.data, "binary"));
 
-            if (!rto || isNaN(rto)) {
-                rto = 1; 
-            } else {
-                rto = parseInt(rto);
-            }
+    return api.sendMessage({
+      body: `╭── • ڪايࢪوس • ──╮\n  ⌈ خـيـال الـذكـاء الاصـطـنـاعـي ⌋\n╰── • ✨ • ──╯\n\n✅ تـم رسـم: ${prompt}\n\n『 ⚙︎ ڪايࢪوس  ͡🦋͜  𝑩𝑶𝑻 』`,
+      attachment: fs.createReadStream(cachePath)
+    }, threadID, () => fs.unlinkSync(cachePath), messageID);
 
-            const sex = {
-                prompt: ayoubzx,
-                sty: style,
-                rto: rto
-            };
-
-            api.sendMessage("🕟 | يـرجـى الانـتـظـار", event.threadID, event.messageID);
-
-            const ninoo = await axios.post("https://app-dodogen-835c6bdca048.herokuapp.com/gen", sex);
-            const generatedImages = ninoo.data.url;
-
-            const imgData = [];
-
-            for (let i = 0; i < generatedImages.length; i++) {
-                const imgUrl = generatedImages[i];
-                const imgResponse = await axios.get(imgUrl, { responseType: 'arraybuffer' });
-                const imgPath = path.join(__dirname, 'cache', `${i + 1}.jpg`);
-                await fs.outputFile(imgPath, imgResponse.data);
-                imgData.push(fs.createReadStream(imgPath));
-            }
-
-            await api.sendMessage({
-                body: `🖼️ | إليك الصور الناتجة عن النص "${ayoub}" بأسلوب رقم ${style} وحجم الصورة ${rto} مع ${sex}:`,
-                attachment: imgData
-            }, event.threadID, event.messageID);
-
-        } catch (error) {
-            console.error(error);
-            await api.sendMessage(`❌ حدث خطأ\n\nخطأ: ${error.message}`, event.threadID);
-        }
-    } catch (error) {
-        console.error(error);
-        await api.sendMessage(`❌ حدث خطأ\n\nخطأ: ${error.message}`, event.threadID);
-    }
+  } catch (e) {
+    return api.sendMessage("❌ عذراً، محرك الرسم مشغول حالياً.", threadID, messageID);
+  }
 };
-
-module.exports.run = async function({api, event}) {};
