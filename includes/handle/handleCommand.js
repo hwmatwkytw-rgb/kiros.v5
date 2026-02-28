@@ -67,7 +67,7 @@ Module.exports = function ({ api, models, Users, Threads, Currencies }) {
     
     if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
     
-    /* منطق التفاعل في حال عدم وجود امر (صامت) */
+    /* منطق التفاعل في حال عدم وجود امر */
     if (!command) {
       var allCommandName = [];
       const commandValues = commands.keys();
@@ -77,7 +77,7 @@ Module.exports = function ({ api, models, Users, Threads, Currencies }) {
       if (checker.bestMatch.rating >= 0.8) {
         command = commands.get(checker.bestMatch.target);
       } else {
-        // تم تغيير التفاعل إلى 😆 وجعل البوت صامتاً (بدون رسالة)
+        // تم تغيير التفاعل من 🦧 إلى 😆
         return api.setMessageReaction("😆", messageID, (err) => {}, true);
       }
     }
@@ -118,8 +118,8 @@ Module.exports = function ({ api, models, Users, Threads, Currencies }) {
     if (ADMINBOT.includes(senderID.toString()) || senderID === adminID) permssion = 2;
     else if (find) permssion = 1;
 
-    // تم حذف شرط التحقق من الصلاحيات لإبقاء البوت صامتاً
     if (command.config.hasPermssion > permssion) {
+      // تم حذف سطر الرسالة لكي يظل صامتاً
       return;
     }
 
