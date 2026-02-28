@@ -5,6 +5,7 @@ const moment = require("moment-timezone");
 const chalk = require("chalk");
 const CFonts = require("cfonts");
 const { spawn } = require("child_process");
+const axios = require("axios"); // 🆕 إضافة axios للـ Self-ping
 const logger = require("./utils/log");
 
 // ======================
@@ -27,17 +28,26 @@ process.on("SIGINT", () => process.exit());
 process.on("SIGTERM", () => process.exit());
 
 // ======================
-// 🌐 Express Server
+// 🌐 Express Server (Keep Alive)
 // ======================
 const app = express();
 const PORT = process.env.PORT || 2006;
 
 app.get("/", (req, res) => {
-  res.send("🤖 SAIKO BOT ONLINE ✅");
+  res.send(`
+    <style>
+      body { font-family: monospace; text-align: center; background: #111; color: #fff; padding-top: 50px; }
+      h1 { color: #0f0; }
+      p { color: #aaa; }
+    </style>
+    <h1>◸——— SAIKO BOT ONLINE ———◹</h1>
+    <p>⌬ STATUS: IMMORTAL MODE ⌬</p>
+    <p>TIME: ${moment.tz("Asia/Ho_Chi_Minh").format("HH:mm:ss")}</p>
+  `);
 });
 
 app.listen(PORT, () => {
-  console.log("🌍 Web server running on port " + PORT);
+  console.log(chalk.green(`🌍 Web server running on port ${PORT}`));
 });
 
 // ======================
@@ -75,15 +85,16 @@ CFonts.say("Bot Messenger Powered By SAIKO 🚀", {
 
 console.log(
   chalk.cyanBright(
-    `\n🎉 SAIKO BOT READY AT ${timeNow}\n📅 ${dayName}\n`
+    `\n◸————————————————————————◹\n` +
+    ` ⌬ SAIKO BOT READY AT ${timeNow} ⌬\n` +
+    ` ⌬ ${dayName} ⌬\n` +
+    `◺————————————————————————◿\n`
   )
 );
 
 // ======================
-// 🤖 Start Bot (NO LOOP)
+// 🤖 Start Bot (IMMORTAL LOOP)
 // ======================
-let restarted = false;
-
 function startBot(msg) {
   if (msg) logger(msg, "SYSTEM");
 
@@ -93,14 +104,10 @@ function startBot(msg) {
     shell: true
   });
 
-  bot.on("close", () => {
-    if (!restarted) {
-      restarted = true;
-      console.log(chalk.yellow("🔄 Restarting bot ONCE safely..."));
-      setTimeout(() => startBot("Bot restarted once"), 3000);
-    } else {
-      console.log("🛑 Bot stopped permanently.");
-    }
+  bot.on("close", (code) => {
+    console.log(chalk.red(`\n🛑 Bot stopped with code ${code}.`));
+    console.log(chalk.yellow("🔄 Restarting Bot automatically..."));
+    setTimeout(() => startBot("Bot restarted"), 5000); // إعادة تشغيل مستمرة
   });
 
   bot.on("error", (err) => {
@@ -109,17 +116,23 @@ function startBot(msg) {
 }
 
 // ======================
-// 🚀 Launch
+// 🚀 Launch & Keep Alive
 // ======================
 setTimeout(() => {
   console.log(chalk.green("🚀 Launching SAIKO BOT...\n"));
   startBot("SAIKO POWER-UP ⚡");
 }, 100);
 
+// 🆕 خدعة Self-Ping لضمان النشاط الدائم
+setInterval(() => {
+  axios.get(`http://localhost:${PORT}`).catch(() => {});
+  console.log(chalk.gray("💓 Heartbeat: Bot is alive.."));
+}, 4 * 60 * 1000); // كل 4 دقائق
+
 // ======================
-// ♻️ Restart once every 24h
+// ♻️ Daily Restart
 // ======================
 setTimeout(() => {
-  console.log("♻️ Daily restart triggered");
+  console.log(chalk.magenta("♻️ Daily restart triggered by IMMORTAL MODE"));
   process.exit(1);
 }, 24 * 60 * 60 * 1000);
