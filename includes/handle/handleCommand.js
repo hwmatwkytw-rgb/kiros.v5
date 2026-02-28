@@ -1,4 +1,4 @@
-module.exports = function ({ api, models, Users, Threads, Currencies }) {
+Module.exports = function ({ api, models, Users, Threads, Currencies }) {
   const stringSimilarity = require("string-similarity"),
     escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
     logger = require("../../utils/log.js");
@@ -67,7 +67,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     
     if (YASSIN === "true" && !ADMINBOT.includes(senderID)) return;
     
-    /* منطق التفاعل في حال عدم وجود امر */
+    /* منطق التفاعل في حال عدم وجود امر (صامت) */
     if (!command) {
       var allCommandName = [];
       const commandValues = commands.keys();
@@ -77,8 +77,8 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
       if (checker.bestMatch.rating >= 0.8) {
         command = commands.get(checker.bestMatch.target);
       } else {
-        // إعادة تفاعل القرد كما طلبت
-        return api.setMessageReaction("🦧", messageID, (err) => {}, true);
+        // تم تغيير التفاعل إلى 😆 وجعل البوت صامتاً (بدون رسالة)
+        return api.setMessageReaction("😆", messageID, (err) => {}, true);
       }
     }
 
@@ -118,8 +118,9 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     if (ADMINBOT.includes(senderID.toString()) || senderID === adminID) permssion = 2;
     else if (find) permssion = 1;
 
+    // تم حذف شرط التحقق من الصلاحيات لإبقاء البوت صامتاً
     if (command.config.hasPermssion > permssion) {
-      return api.sendMessage("صلاحياتك لا تسمح باستخدام: " + command.config.name, event.threadID);
+      return;
     }
 
     if (!client.cooldowns.has(command.config.name)) {
