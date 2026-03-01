@@ -1,4 +1,4 @@
-Module.exports = function ({ api, models, Users, Threads, Currencies }) {
+module.exports = function ({ api, models, Users, Threads, Currencies }) {
   const stringSimilarity = require("string-similarity"),
     escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
     logger = require("../../utils/log.js");
@@ -77,8 +77,8 @@ Module.exports = function ({ api, models, Users, Threads, Currencies }) {
       if (checker.bestMatch.rating >= 0.8) {
         command = commands.get(checker.bestMatch.target);
       } else {
-        // تم تغيير التفاعل من 🦧 إلى 😆
-        return api.setMessageReaction("😆", messageID, (err) => {}, true);
+        // إعادة تفاعل القرد كما طلبت
+        return api.setMessageReaction("🦧", messageID, (err) => {}, true);
       }
     }
 
@@ -119,8 +119,7 @@ Module.exports = function ({ api, models, Users, Threads, Currencies }) {
     else if (find) permssion = 1;
 
     if (command.config.hasPermssion > permssion) {
-      // تم حذف سطر الرسالة لكي يظل صامتاً
-      return;
+      return api.sendMessage("صلاحياتك لا تسمح باستخدام: " + command.config.name, event.threadID);
     }
 
     if (!client.cooldowns.has(command.config.name)) {
