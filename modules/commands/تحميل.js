@@ -4,7 +4,7 @@ const path = require("path");
 
 module.exports.config = {
   name: "تحميل",
-  version: "2.0.0",
+  version: "2.1.0",
   hasPermssion: 0,
   credits: "ڪايࢪوس",
   description: "تحميل ذكي من كل المنصات مع تفاعل ملون",
@@ -30,31 +30,35 @@ module.exports.run = async function ({ api, event, args }) {
   else if (url.includes("instagram.com")) { platform = "إنستجرام"; emoji = "🟣"; theme = "📸"; }
 
   api.setMessageReaction(emoji, messageID, () => {}, true);
-  const waitMsg = await api.sendMessage(`${theme} جاري جلب الفيديو من ${platform}..`, threadID);
+  const waitMsg = await api.sendMessage(`${theme} جاري جلب البيانات من ${platform}.. يرجى الانتظار.`, threadID);
 
   try {
-    // استخدام API محسّن وسريع جداً
-    const res = await axios.get(`https://api.vreden.my.id/api/download/allinone?url=${encodeURIComponent(url)}`);
+    // API جديد سريع
+    const apiRes = await axios.get(`https://api.ryann.my.id/download/allinone?url=${encodeURIComponent(url)}`);
     
-    // استخراج البيانات (تعديل المسارات حسب استجابة الـ API)
-    const result = res.data.result;
-    const downloadUrl = result.url || (result.data && result.data[0].url);
-    const title = result.title || "فيديو بدون عنوان";
+    // استخراج رابط التحميل والبيانات
+    const result = apiRes.data;
+    if (!result || result.status !== 200) throw new Error("API_ERROR");
 
-    if (!downloadUrl) throw new Error("URL not found");
+    const downloadUrl = result.data.download_url;
+    const title = result.data.title || "فيديو بدون عنوان";
+
+    if (!downloadUrl) throw new Error("URL_NOT_FOUND");
 
     const cachePath = path.join(__dirname, "cache", `kirus_${Date.now()}.mp4`);
     
-    // عملية التحميل
+    // عملية تحميل الفيديو
     const videoStream = await axios.get(downloadUrl, { responseType: "arraybuffer" });
     fs.writeFileSync(cachePath, Buffer.from(videoStream.data, "binary"));
 
     const stats = fs.statSync(cachePath);
     const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
 
-    if (stats.size > 45 * 1024 * 1024) { // حد 45 ميجا لضمان الإرسال
+    // حد الإرسال (تجاوز 45 ميجا قد يسبب فشل الإرسال في مسنجر)
+    if (stats.size > 45 * 1024 * 1024) { 
       fs.unlinkSync(cachePath);
-      return api.sendMessage("🍃 عذراً يا مطور، الفيديو ثقيل جداً (تجاوز 45MB).", threadID, messageID);
+      api.unsendMessage(waitMsg.messageID);
+      return api.sendMessage("🍃 عذراً، الفيديو ثقيل جداً (تجاوز 45MB).", threadID, messageID);
     }
 
     api.unsendMessage(waitMsg.messageID);
@@ -71,6 +75,7 @@ module.exports.run = async function ({ api, event, args }) {
   } catch (err) {
     api.unsendMessage(waitMsg.messageID);
     api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage("🍃 لم أستطع تحميل الفيديو، تأكد من أن الرابط متاح للعامة.", threadID, messageID);
+    console.error(err); // لتوثيق الخطأ في الكونسول
+    return api.sendMessage("🍃 لم أستطع تحميل الفيديو، تأكد من أن الرابط متاح للعامة أو أن الـ API لا يزال يعمل.", threadID, messageID);
   }
 };
