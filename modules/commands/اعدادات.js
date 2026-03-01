@@ -1,16 +1,26 @@
 module.exports.config = {
     name: "اعدادات",
-    version: "2.7.5",
+    version: "2.7.6",
     hasPermssion: 1,
     credits: "Gemini AI",
-    description: "نظام حماية وإعدادات المجموعة",
+    description: "نظام حماية وإعدادات المجموعة (للمشرفين فقط)",
     commandCategory: "الادمن",
     usages: "[الأرقام]",
     cooldowns: 2,
 };
 
 module.exports.run = async function ({ api, event, Threads }) {
-    const { threadID, messageID } = event;
+    const { threadID, messageID, senderID } = event;
+
+    // --- التحقق من رتبة المستخدم (يجب أن يكون مشرفاً) ---
+    const threadInfo = await api.getThreadInfo(threadID);
+    const isAdmin = threadInfo.adminIDs.some(i => i.id == senderID);
+    
+    if (!isAdmin) {
+        return api.sendMessage("⚠️ | عذراً، هذا الأمر مخصص لمشرفي المجموعة فقط.", threadID, messageID);
+    }
+    // ----------------------------------------------
+
     let data = (await Threads.getData(threadID)).data || {};
     
     if (!data.antiSettings) {
@@ -30,7 +40,7 @@ module.exports.run = async function ({ api, event, Threads }) {
         global.client.handleReply.push({
             name: this.config.name,
             messageID: info.messageID,
-            author: event.senderID,
+            author: senderID,
             settings: s
         });
     }, messageID);
@@ -68,13 +78,12 @@ module.exports.handleReaction = async function ({ api, event, handleReaction, Th
 
     const threadInfo = await api.getThreadInfo(threadID);
     const botID = api.getCurrentUserID();
-    const isAdmin = threadInfo.adminIDs.some(i => i.id == botID);
+    const isBotAdmin = threadInfo.adminIDs.some(i => i.id == botID);
     
     let finalSettings = handleReaction.newSettings;
     let warnings = [];
 
-    // التحقق من صلاحيات الأدمن للميزات الحساسة
-    if (!isAdmin) {
+    if (!isBotAdmin) {
         if (finalSettings.antiOut) { finalSettings.antiOut = false; warnings.push("الخروج"); }
         if (finalSettings.antiImage) { finalSettings.antiImage = false; warnings.push("الصورة"); }
         if (finalSettings.antiNickname) { finalSettings.antiNickname = false; warnings.push("الكنية"); }
@@ -83,10 +92,9 @@ module.exports.handleReaction = async function ({ api, event, handleReaction, Th
     let data = (await Threads.getData(threadID)).data || {};
     data.antiSettings = finalSettings;
     
-    // حفظ لقطة دقيقة للحالة الحالية لاستعادتها لاحقاً
     data.snapshot = {
         name: threadInfo.threadName,
-        imageSrc: threadInfo.imageSrc, // رابط الصورة الأصلي
+        imageSrc: threadInfo.imageSrc,
         nicknames: threadInfo.nicknames
     };
 
