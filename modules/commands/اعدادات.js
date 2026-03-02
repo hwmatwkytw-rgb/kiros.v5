@@ -1,25 +1,33 @@
 module.exports.config = {
     name: "اعدادات",
-    version: "2.7.6",
+    version: "2.8.0",
     hasPermssion: 1,
-    credits: "Gemini AI",
-    description: "نظام حماية وإعدادات المجموعة (للمشرفين فقط)",
+    credits: "النسخة الأصلية",
+    description: "نظام حماية وإعدادات المجموعة",
     commandCategory: "الادمن",
     usages: "[الأرقام]",
     cooldowns: 2,
 };
 
+function getMenuText(s) {
+    return `╭── • إعـدادات الـدردشـة\n` +
+           `│ 1 ⊸ [${s.antiOut ? "✅" : "❌"}] مـكافـحـة الـخـروج\n` +
+           `│ 2 ⊸ [${s.antiName ? "✅" : "❌"}] مـكافـحـة الاسـم\n` +
+           `│ 3 ⊸ [${s.antiImage ? "✅" : "❌"}] مـكافـحـة الـصورة\n` +
+           `│ 4 ⊸ [${s.antiNickname ? "✅" : "❌"}] مـكافـحـة الـكـنية\n` +
+           `│ 5 ⊸ [${s.notify ? "🔔" : "🔕"}] الإشـعـارات\n` +
+           `╰── •`;
+}
+
 module.exports.run = async function ({ api, event, Threads }) {
     const { threadID, messageID, senderID } = event;
 
-    // --- التحقق من رتبة المستخدم (يجب أن يكون مشرفاً) ---
     const threadInfo = await api.getThreadInfo(threadID);
     const isAdmin = threadInfo.adminIDs.some(i => i.id == senderID);
     
     if (!isAdmin) {
         return api.sendMessage("⚠️ | عذراً، هذا الأمر مخصص لمشرفي المجموعة فقط.", threadID, messageID);
     }
-    // ----------------------------------------------
 
     let data = (await Threads.getData(threadID)).data || {};
     
@@ -28,13 +36,7 @@ module.exports.run = async function ({ api, event, Threads }) {
     }
 
     const s = data.antiSettings;
-    const menu = `╭── • إعـدادات الـدردشـة\n` +
-                 `│ 1 ⊸ [${s.antiOut ? "✅" : "❌"}] مـكافـحـة الـخـروج\n` +
-                 `│ 2 ⊸ [${s.antiName ? "✅" : "❌"}] مـكافـحـة الاسـم\n` +
-                 `│ 3 ⊸ [${s.antiImage ? "✅" : "❌"}] مـكافـحـة الـصورة\n` +
-                 `│ 4 ⊸ [${s.antiNickname ? "✅" : "❌"}] مـكافـحـة الـكـنية\n` +
-                 `│ 5 ⊸ [${s.notify ? "🔔" : "🔕"}] الإشـعـارات\n` +
-                 `╰── • رُد بـأرقـام الـخـيارات لـتغيير حـالـتـها`;
+    const menu = getMenuText(s) + "\nرُد بـأرقـام الـخـيارات لـتغيير حـالـتـها";
 
     return api.sendMessage(menu, threadID, (err, info) => {
         global.client.handleReply.push({
@@ -62,14 +64,19 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         if (num == "5") s.notify = !s.notify;
     });
 
-    return api.sendMessage("╭── • تـأكـيد\n│ تـفاعل بـ 👍 لـحفظ وحـماية حـالة الـمجموعة الآن\n╰── •", threadID, (err, info) => {
+    const updatedMenu = getMenuText(s);
+    const finalMsg = `${updatedMenu}\n\n╭── • تـأكـيد\n│ تـفاعل بـ 👍 لـحفظ وحـماية حـالة الـمجموعة الآن\n╰── •`;
+
+    api.unsendMessage(handleReply.messageID);
+
+    return api.sendMessage(finalMsg, threadID, (err, info) => {
         global.client.handleReaction.push({
             name: this.config.name,
             messageID: info.messageID,
             author: senderID,
             newSettings: s
         });
-    }, messageID);
+    });
 };
 
 module.exports.handleReaction = async function ({ api, event, handleReaction, Threads }) {
@@ -100,6 +107,8 @@ module.exports.handleReaction = async function ({ api, event, handleReaction, Th
 
     await Threads.setData(threadID, { data });
     
+    api.unsendMessage(handleReaction.messageID);
+
     let msg = `╭── • نـجـاح\n│ تـم تـحديث الإعـدادات وأخـذ لـقطة لـلحماية`;
     if (warnings.length > 0) {
         msg += `\n│ ⚠️ تـنبيه: تـم تـعطيل (${warnings.join("-")}) لأن الـبوت لـيس مـشرفاً`;
