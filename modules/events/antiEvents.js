@@ -5,7 +5,7 @@ const path = require("path");
 module.exports.config = {
     name: "antiEvents",
     eventType: ["log:thread-name", "log:thread-icon", "log:user-nickname", "log:unsubscribe"],
-    version: "1.6.0",
+    version: "1.6.4",
     credits: "النسخة الأصلية",
     description: "نظام حماية"
 };
@@ -22,6 +22,7 @@ module.exports.run = async function ({ event, api, Threads }) {
     
     const shouldNotify = settings.notify;
 
+    // 🛡️ [1] مـكافـحـة الـخـروج
     if (logMessageType === "log:unsubscribe") {
         const leftID = logMessageData.leftParticipantId;
         
@@ -29,22 +30,33 @@ module.exports.run = async function ({ event, api, Threads }) {
 
         if (settings.antiOut) {
             try {
+                // إعادة العضو
                 await api.addUserToGroup(leftID, threadID);
                 
-                setTimeout(async () => {
-                    await api.removeUserFromGroup(leftID, threadID);
-                    if (shouldNotify) {
-                        api.sendMessage("مارق وين يعب (҂𓁹‿𓁹)⁦", threadID);
-                    }
-                }, 1000);
+                // تم حذف جزء الطرد هنا والاكتفاء بإعادة العضو
+                if (shouldNotify) {
+                    api.sendMessage("مارق وين يعب (҂𓁹‿𓁹)⁦", threadID);
+                }
                 
-            } catch (e) {}
+            } catch (e) {
+                // في حال فشل الإضافة
+                if (shouldNotify) {
+                    api.sendMessage("بي وشك 🦧📿", threadID);
+                }
+                console.error("خطأ في مكافحة الخروج:", e);
+            }
+        } else {
+            // في حال عدم تفعيل الحماية
+            if (shouldNotify) {
+                api.sendMessage("كانت عبة 🦧📿", threadID);
+            }
         }
         return;
     }
 
     if (author == botID) return;
 
+    // 🖼️ [2] حـمـايـة الـصـورة
     if (logMessageType === "log:thread-icon" && settings.antiImage) {
         if (snapshot.imageSrc) {
             const cachePath = path.join(__dirname, "cache", `restore_${threadID}.png`);
@@ -64,6 +76,7 @@ module.exports.run = async function ({ event, api, Threads }) {
         }
     }
 
+    // 📝 [3] حـمـايـة الاسـم
     if (logMessageType === "log:thread-name" && settings.antiName) {
         if (logMessageData.name !== snapshot.name) {
             api.setTitle(snapshot.name, threadID, (err) => {
@@ -74,6 +87,7 @@ module.exports.run = async function ({ event, api, Threads }) {
         }
     }
 
+    // 👤 [4] حـمـايـة الـكـنـيـة
     if (logMessageType === "log:user-nickname" && settings.antiNickname) {
         const targetID = logMessageData.participant_id;
         const oldNick = (snapshot.nicknames && snapshot.nicknames[targetID]) ? snapshot.nicknames[targetID] : "";
