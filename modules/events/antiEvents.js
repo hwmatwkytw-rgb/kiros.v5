@@ -5,51 +5,50 @@ const path = require("path");
 module.exports.config = {
     name: "antiEvents",
     eventType: ["log:thread-name", "log:thread-icon", "log:user-nickname", "log:unsubscribe"],
-    version: "1.5.0",
-    credits: "Gemini AI",
-    description: "نظام حماية تلقائي متكامل"
+    version: "1.6.0",
+    credits: "النسخة الأصلية",
+    description: "نظام حماية"
 };
 
 module.exports.run = async function ({ event, api, Threads }) {
     const { threadID, logMessageType, logMessageData, author } = event;
     const botID = api.getCurrentUserID();
     
-    const thread = await Threads.getData(threadID);
-    if (!thread || !thread.data || !thread.data.antiSettings) return;
+    const threadData = await Threads.getData(threadID);
+    if (!threadData || !threadData.data || !threadData.data.antiSettings) return;
 
-    const settings = thread.data.antiSettings;
-    const snapshot = thread.data.snapshot || {};
+    const settings = threadData.data.antiSettings;
+    const snapshot = threadData.data.snapshot || {};
+    
+    const shouldNotify = settings.notify;
 
-    // 🛡️ [1] مـكافـحـة الـخـروج
     if (logMessageType === "log:unsubscribe") {
         const leftID = logMessageData.leftParticipantId;
+        
         if (leftID == botID) return;
 
         if (settings.antiOut) {
             try {
                 await api.addUserToGroup(leftID, threadID);
-                setTimeout(() => {
-                    api.removeUserFromGroup(leftID, threadID);
-                    api.sendMessage("مارق وين يعب (҂𓁹‿𓁹)⁦", threadID);
-                }, 1500);
-            } catch (e) {
-                api.sendMessage("بي وشك •-•", threadID);
-            }
-        } else {
-            api.sendMessage("كانت جارية (҂𓁹‿𓁹)⁦", threadID);
+                
+                setTimeout(async () => {
+                    await api.removeUserFromGroup(leftID, threadID);
+                    if (shouldNotify) {
+                        api.sendMessage("مارق وين يعب (҂𓁹‿𓁹)⁦", threadID);
+                    }
+                }, 1000);
+                
+            } catch (e) {}
         }
         return;
     }
 
-    // تجاهل التغييرات التي يقوم بها البوت نفسه
     if (author == botID) return;
 
-    // 🖼️ [2] حـمـايـة الـصـورة (تركيز عالي على الاستعادة)
     if (logMessageType === "log:thread-icon" && settings.antiImage) {
         if (snapshot.imageSrc) {
             const cachePath = path.join(__dirname, "cache", `restore_${threadID}.png`);
             try {
-                // التأكد من وجود مجلد الكاش
                 if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
 
                 const response = await axios.get(snapshot.imageSrc, { responseType: "arraybuffer" });
@@ -57,30 +56,32 @@ module.exports.run = async function ({ event, api, Threads }) {
                 
                 api.changeGroupImage(fs.createReadStream(cachePath), threadID, (err) => {
                     if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
-                    if (!err) api.sendMessage("[Anti-Image] تـم صـد تـغيير الـصورة واسـتعادتها.", threadID);
+                    if (!err && shouldNotify) {
+                        api.sendMessage("[Anti-Image] تـغيير الـصورة غير مسموح به، لذالك تمت اعادة الصورة لحالتها الاصلية.", threadID);
+                    }
                 });
-            } catch (e) {
-                console.error("خطأ في استعادة الصورة:", e);
-            }
+            } catch (e) {}
         }
     }
 
-    // 📝 [3] حـمـايـة الاسـم
     if (logMessageType === "log:thread-name" && settings.antiName) {
         if (logMessageData.name !== snapshot.name) {
-            api.setTitle(snapshot.name, threadID, () => {
-                api.sendMessage("[Anti-Name] مـمنوع تـغيير اسـم الـمجموعة.", threadID);
+            api.setTitle(snapshot.name, threadID, (err) => {
+                if (!err && shouldNotify) {
+                    api.sendMessage("[Anti-Name] تـغيير الاسم غير مسموح به، لذالك تمت اعادة الاسم لحالتها الاصلية.", threadID);
+                }
             });
         }
     }
 
-    // 👤 [4] حـمـايـة الـكـنـيـة
     if (logMessageType === "log:user-nickname" && settings.antiNickname) {
         const targetID = logMessageData.participant_id;
         const oldNick = (snapshot.nicknames && snapshot.nicknames[targetID]) ? snapshot.nicknames[targetID] : "";
         
-        api.changeNickname(oldNick, threadID, targetID, () => {
-            api.sendMessage("[Anti-Nickname] تـم إلـغاء تـغيير الـكنية.", threadID);
+        api.changeNickname(oldNick, threadID, targetID, (err) => {
+            if (!err && shouldNotify) {
+                api.sendMessage("[Anti-Nickname] تـغيير الكنية غير مسموح به، لذالك تمت اعادة الكنية لحالتها الاصلية.", threadID);
+            }
         });
     }
 };
