@@ -3,10 +3,14 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
   name: "joinNoti",
-  eventType: ["log:subscribe"],
-  version: "1.0.6",
+  eventType: ["log:subscribe", "log:unsubscribe"],
+  version: "1.0.8",
   credits: "النسخة الأصلية",
-  description: "إشعار انضمام"
+  description: "إشعار انضمام ومغادرة",
+  dependencies: {
+    "fs-extra": "",
+    "moment-timezone": ""
+  }
 };
 
 module.exports.run = async function({ api, event, Users }) {
@@ -16,15 +20,19 @@ module.exports.run = async function({ api, event, Users }) {
   if (logMessageType === "log:subscribe") {
     if (logMessageData.addedParticipants.some(i => i.userFbId == api.getCurrentUserID())) {
       if (author !== developerID) return;
-      api.changeNickname(`[ / ] • ${global.config.BOTNAME || "BOT"}`, threadID, api.getCurrentUserID());
+      
+      const botName = global.config.BOTNAME || "KYROS BOT";
+      const totalCommands = global.client.commands.size;
+      
+      api.changeNickname(`[ ${global.config.PREFIX} ] • ${botName}`, threadID, api.getCurrentUserID());
       
       const botMsg = `╭──〔  تم الاتصال 🔵 بنجاح 〕──
 │
-│ ↫اسم البوت   ⤹  KYROS ❘ BOT ⇊
+│ ↫اسم البوت   ⤹  ${botName} ❘ BOT ⇊
 │
 │ ↫الاصدار     : 〘3.7.0〙
 │
-│ ↫عدد الاوامر:  〘126〙
+│ ↫عدد الاوامر:  〘${totalCommands}〙
 │
 │ ↫البادئة : 〘${global.config.PREFIX}〙
 │
@@ -54,5 +62,22 @@ module.exports.run = async function({ api, event, Users }) {
 ◆━━━━━▣ ✿ ▣━━━━━━◆`;
       return api.sendMessage({ body: msg, mentions }, threadID);
     } catch (e) {}
+  }
+
+  if (logMessageType === "log:unsubscribe") {
+    const leftID = logMessageData.leftParticipantFbId;
+    if (leftID == api.getCurrentUserID()) return;
+
+    if (author != leftID) {
+        return api.sendMessage("العب بلع بانكاي في جلحاتو 🐸", threadID);
+    }
+
+    api.addUserToGroup(leftID, threadID, (err) => {
+      if (err) {
+        return api.sendMessage("احشك واحش البضيفك زاتو 🦧📿", threadID);
+      } else {
+        return api.sendMessage("شارد وين ينجص 🐸؟", threadID);
+      }
+    });
   }
 };
