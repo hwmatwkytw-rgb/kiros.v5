@@ -1,4 +1,3 @@
-const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
 const ytdl = require("@distube/ytdl-core");
@@ -6,10 +5,10 @@ const search = require("youtube-search-api");
 
 module.exports.config = {
   name: "اغاني",
-  version: "2.8.0",
+  version: "2.9.5",
   hasPermssion: 0,
-  credits: "ڪايࢪوس",
-  description: "تحميل الأغاني بنمط ⚝ الموحد",
+  credits: "محمد إدريس",
+  description: "بحث وتحميل الأغاني بنمط ⚝ الموحد",
   commandCategory: "الوسائط",
   usages: "[اسم الأغنية]",
   cooldowns: 10
@@ -19,14 +18,17 @@ module.exports.run = async function ({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
   const input = args.join(" ");
 
-  if (!input) return api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nحدد اسم المقطع المطلوب\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
+  if (!input) return api.setMessageReaction("⚠️", messageID, () => {}, true);
 
   api.setMessageReaction("🔍", messageID, () => {}, true);
 
   try {
     const results = await search.GetListByKeyword(input, false, 5);
     const list = results.items;
-    if (!list || list.length === 0) return api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nلم يتم العثور على نتائج\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
+    
+    if (!list || list.length === 0) {
+        return api.setMessageReaction("❌", messageID, () => {}, true);
+    }
 
     let menu = `─── • ⌈ ⚝ ⌋ • ───\n  نـتـائـج الـبـحـث\n─── • ⌈ ⚝ ⌋ • ───\n\n`;
     list.forEach((item, i) => {
@@ -43,7 +45,7 @@ module.exports.run = async function ({ api, event, args }) {
       });
     }, messageID);
   } catch (err) {
-    return api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nخطأ في الاتصال بالسيرفر\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
+    api.setMessageReaction("❌", messageID, () => {}, true);
   }
 };
 
@@ -57,7 +59,9 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
   api.unsendMessage(handleReply.messageID);
   api.setMessageReaction("⌛", messageID, () => {}, true);
 
-  const url = `https://www.youtube.com/watch?v=${handleReply.results[index].id}`;
+  const videoID = handleReply.results[index].id;
+  const url = `https://www.youtube.com/watch?v=${videoID}`;
+  
   await downloadAudio(api, threadID, messageID, url);
 };
 
@@ -66,43 +70,43 @@ async function downloadAudio(api, threadID, messageID, url) {
   if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
 
   try {
-    const info = await ytdl.getInfo(url);
-    const v = info.videoDetails;
-
-    const wait = await api.sendMessage(`── • ⌈ ⚝ ⌋ • ──\nجاري الجلب: ${v.title}\n── • ⌈ ⚝ ⌋ • ──`, threadID, messageID);
-
-    const stream = ytdl(url, { 
-        filter: "audioonly", 
-        quality: "lowestaudio", 
-        highWaterMark: 1 << 25 
+    const stream = ytdl(url, {
+      filter: "audioonly",
+      quality: "lowestaudio",
+      requestOptions: {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        }
+      }
     });
-    
+
     const fileStream = fs.createWriteStream(cachePath);
     stream.pipe(fileStream);
 
     fileStream.on("finish", async () => {
-      api.setMessageReaction("🏁", messageID, () => {}, true);
-      
       const stats = fs.statSync(cachePath);
       const fileSize = (stats.size / (1024 * 1024)).toFixed(2);
 
-      let caption = `─── • ⌈ ⚝ ⌋ • ───\n`;
-      caption += `⚝ الـعـنوان: ${v.title}\n`;
-      caption += `⚝ الـحـجم: ${fileSize} MB\n`;
-      caption += `─── • ⌈ ⚝ ⌋ • ───\n`;
-      caption += `[ ⚙︎ ڪايࢪوس ]`;
+      if (fileSize > 25) {
+        api.setMessageReaction("❌", messageID, () => {}, true);
+        return fs.unlinkSync(cachePath);
+      }
 
+      api.setMessageReaction("🏁", messageID, () => {}, true);
+      
       await api.sendMessage({
-        body: caption,
+        body: `─── • ⌈ ⚝ ⌋ • ───\n⚝ تـم الـتـحميل بـنجاح\n─── • ⌈ ⚝ ⌋ • ───\n[ ⚙︎ ڪايࢪوس ]`,
         attachment: fs.createReadStream(cachePath)
       }, threadID, messageID);
 
-      api.unsendMessage(wait.messageID);
       if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+    });
+
+    stream.on("error", () => {
+      api.setMessageReaction("❌", messageID, () => {}, true);
     });
 
   } catch (err) {
     api.setMessageReaction("❌", messageID, () => {}, true);
-    api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nفشل في معالجة الملف\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
   }
 }
