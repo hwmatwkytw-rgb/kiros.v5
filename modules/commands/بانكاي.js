@@ -23,14 +23,14 @@ module.exports.run = async function({ api, event, args }) {
     // 1. التحقق من صلاحية المستخدم (أدمن أو مطور)
     const isAdmin = threadInfo.adminIDs.some(admin => admin.id === senderID);
     if (!isAdmin && senderID !== DEVELOPER_ID) {
-      return api.sendMessage("ارقص تاني ( 𖠂_𖠂)", threadID, messageID);
+      return api.sendMessage("بتعرف تهز ʕᵕ᷄-ᵕ᷅ʔ؟", threadID, messageID);
     }
 
     // 2. التحقق من صلاحية البوت (هل هو أدمن؟)
     const botID = api.getCurrentUserID();
     const isBotAdmin = threadInfo.adminIDs.some(admin => admin.id === botID);
     if (!isBotAdmin) {
-      return api.sendMessage("ارفع ابوك دا ادمن اول 🐢", threadID, messageID);
+      return api.sendMessage("ارفع ابوك دا اول 🦧📿", threadID, messageID);
     }
 
     let targetID = null;
@@ -56,14 +56,14 @@ module.exports.run = async function({ api, event, args }) {
     await api.removeUserFromGroup(targetID, threadID);
 
     // إرسال الصورة والرسالة
-    const imageUrl = "https://i.ibb.co/dwvYh0Yz/3098e2fb48d8ac91fe240de5ba4ff977.jpg";
+    const imageUrl = "https://i.ibb.co/bg9N9sqb/received-1070178788428323-jpeg.jpg";
     const path = __dirname + `/cache/bankai_${targetID}.jpg`;
 
     const response = await axios.get(imageUrl, { responseType: "arraybuffer" });
     fs.writeFileSync(path, Buffer.from(response.data, "binary"));
 
     api.sendMessage({
-      body: "تم تنفيذ حكم الاعدام 🐸☝🏿",
+      body: "برا احش جدك 🗿📿",
       attachment: fs.createReadStream(path)
     }, threadID, messageID);
 
