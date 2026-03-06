@@ -6,12 +6,12 @@ const search = require("youtube-search-api");
 
 module.exports.config = {
   name: "اغاني",
-  version: "2.5.5",
+  version: "2.8.0",
   hasPermssion: 0,
   credits: "ڪايࢪوس",
-  description: "بحث وتحميل الأغاني مع تفاصيل كاملة",
+  description: "تحميل الأغاني بنمط ⚝ الموحد",
   commandCategory: "الوسائط",
-  usages: "[اسم الأغنية أو رابط]",
+  usages: "[اسم الأغنية]",
   cooldowns: 10
 };
 
@@ -19,24 +19,20 @@ module.exports.run = async function ({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
   const input = args.join(" ");
 
-  if (!input) return api.sendMessage("╭── • 📥 • ──╮\n يرجى وضع رابط أو اسم أغنية\n╰── • 📥 • ──╯", threadID, messageID);
-
-  if (ytdl.validateURL(input)) {
-    api.setMessageReaction("⬇️", messageID, () => {}, true);
-    return downloadAudio(api, threadID, messageID, input);
-  }
+  if (!input) return api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nحدد اسم المقطع المطلوب\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
 
   api.setMessageReaction("🔍", messageID, () => {}, true);
+
   try {
     const results = await search.GetListByKeyword(input, false, 5);
     const list = results.items;
-    if (!list || list.length === 0) return api.sendMessage("⚠️ لم أجد نتائج.", threadID, messageID);
+    if (!list || list.length === 0) return api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nلم يتم العثور على نتائج\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
 
-    let menu = `╭── • ڪايࢪوس • ──╮\n  ⌈ نـتـائـج الـبـحـث ⌋\n╰── • 🎵 • ──╯\n\n`;
+    let menu = `─── • ⌈ ⚝ ⌋ • ───\n  نـتـائـج الـبـحـث\n─── • ⌈ ⚝ ⌋ • ───\n\n`;
     list.forEach((item, i) => {
-      menu += `${i + 1}. ${item.title}\n⏳ المدة: ${item.length.simpleText}\n\n`;
+      menu += `⌈ ${i + 1} ⌋ ${item.title}\n⚝ الـمدة: ${item.length.simpleText}\n\n`;
     });
-    menu += `«— رد برقم الأغنية —»`;
+    menu += `« رد بالرقم للتحميل »\n─── • ⌈ ⚝ ⌋ • ───`;
 
     return api.sendMessage(menu, threadID, (err, info) => {
       global.client.handleReply.push({
@@ -47,7 +43,7 @@ module.exports.run = async function ({ api, event, args }) {
       });
     }, messageID);
   } catch (err) {
-    return api.sendMessage("❌ حدث خطأ في البحث.", threadID, messageID);
+    return api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nخطأ في الاتصال بالسيرفر\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
   }
 };
 
@@ -59,83 +55,54 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
   if (isNaN(body) || index < 0 || index >= handleReply.results.length) return;
 
   api.unsendMessage(handleReply.messageID);
-  api.setMessageReaction("⏳", messageID, () => {}, true);
+  api.setMessageReaction("⌛", messageID, () => {}, true);
 
   const url = `https://www.youtube.com/watch?v=${handleReply.results[index].id}`;
   await downloadAudio(api, threadID, messageID, url);
 };
 
 async function downloadAudio(api, threadID, messageID, url) {
-  const cacheDir = path.join(__dirname, "cache");
-  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
-  const cachePath = path.join(cacheDir, `${Date.now()}.mp3`);
-
-  let waitMessageID;
+  const cachePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
+  if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
 
   try {
-    // إرسال رسالة انتظار وتخزين الـ ID الخاص بها
-    const wait = await api.sendMessage(`⏳ جاري جلب البيانات والمعالجة...`, threadID, messageID);
-    waitMessageID = wait.messageID;
-
-    const info = await ytdl.getInfo(url, {
-        requestOptions: {
-            headers: {
-                cookie: "" // (اختياري) يمكنك وضع الكوكيز هنا إذا استمرت المشاكل
-            }
-        }
-    });
-    
+    const info = await ytdl.getInfo(url);
     const v = info.videoDetails;
-    
-    // التحقق من الحجم قبل البدء (تقريبي)
-    const audioFormat = ytdl.chooseFormat(info.formats, { quality: 'highestaudio' });
-    
-    const stream = ytdl.downloadFromInfo(info, {
-      filter: "audioonly",
-      quality: "highestaudio",
-      highWaterMark: 1 << 25 // زيادة حجم البافر لتجنب التقطيع
-    });
 
+    const wait = await api.sendMessage(`── • ⌈ ⚝ ⌋ • ──\nجاري الجلب: ${v.title}\n── • ⌈ ⚝ ⌋ • ──`, threadID, messageID);
+
+    const stream = ytdl(url, { 
+        filter: "audioonly", 
+        quality: "lowestaudio", 
+        highWaterMark: 1 << 25 
+    });
+    
     const fileStream = fs.createWriteStream(cachePath);
     stream.pipe(fileStream);
 
     fileStream.on("finish", async () => {
+      api.setMessageReaction("🏁", messageID, () => {}, true);
+      
       const stats = fs.statSync(cachePath);
       const fileSize = (stats.size / (1024 * 1024)).toFixed(2);
 
-      if (stats.size > 83886080) { // 80MB
-        if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
-        return api.editMessage("❌ الملف ضخم جداً (أكبر من 80MB).", waitMessageID, threadID);
-      }
-
-      const caption = `✅ تـم الـتـحـمـيـل بـنـجـاح\n` +
-                      `━━━━━━━━━━━━━━━\n` +
-                      `🎼 الـعـنـوان: ${v.title}\n` +
-                      `👤 الـقـنـاة: ${v.author.name}\n` +
-                      `⏳ الـمـدة: ${Math.floor(v.lengthSeconds / 60)} دقيقة\n` +
-                      `📦 الـحـجـم: ${fileSize} MB\n` +
-                      `━━━━━━━━━━━━━━━\n` +
-                      `『 ⚙︎ ڪايࢪوس  ͡🦋͜  𝑩𝑶𝑻 』`;
+      let caption = `─── • ⌈ ⚝ ⌋ • ───\n`;
+      caption += `⚝ الـعـنوان: ${v.title}\n`;
+      caption += `⚝ الـحـجم: ${fileSize} MB\n`;
+      caption += `─── • ⌈ ⚝ ⌋ • ───\n`;
+      caption += `[ ⚙︎ ڪايࢪوس ]`;
 
       await api.sendMessage({
         body: caption,
         attachment: fs.createReadStream(cachePath)
-      }, threadID, () => {
-          if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
-      }, messageID);
+      }, threadID, messageID);
 
-      api.unsendMessage(waitMessageID);
-      api.setMessageReaction("✅", messageID, () => {}, true);
-    });
-
-    fileStream.on("error", (err) => {
-        throw err;
+      api.unsendMessage(wait.messageID);
+      if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
     });
 
   } catch (err) {
-    console.error(err);
-    if (waitMessageID) api.unsendMessage(waitMessageID);
-    api.sendMessage(`❌ فشل التحميل. (قد يكون الفيديو محمي أو السيرفر محظور من يوتيوب)`, threadID, messageID);
-    if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+    api.setMessageReaction("❌", messageID, () => {}, true);
+    api.sendMessage("── • ⌈ ⚝ ⌋ • ──\nفشل في معالجة الملف\n── • ⌈ ⚝ ⌋ • ──", threadID, messageID);
   }
 }
