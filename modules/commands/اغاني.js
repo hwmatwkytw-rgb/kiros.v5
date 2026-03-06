@@ -6,7 +6,7 @@ const search = require("youtube-search-api");
 
 module.exports.config = {
   name: "اغاني",
-  version: "2.5.0",
+  version: "2.5.5",
   hasPermssion: 0,
   credits: "ڪايࢪوس",
   description: "بحث وتحميل الأغاني مع تفاصيل كاملة",
@@ -66,34 +66,53 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
 };
 
 async function downloadAudio(api, threadID, messageID, url) {
-  const cachePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
-  if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
+  const cacheDir = path.join(__dirname, "cache");
+  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
+  const cachePath = path.join(cacheDir, `${Date.now()}.mp3`);
+
+  let waitMessageID;
 
   try {
-    // جلب معلومات الفيديو الكاملة
-    const info = await ytdl.getInfo(url);
-    const v = info.videoDetails;
+    // إرسال رسالة انتظار وتخزين الـ ID الخاص بها
+    const wait = await api.sendMessage(`⏳ جاري جلب البيانات والمعالجة...`, threadID, messageID);
+    waitMessageID = wait.messageID;
 
-    const wait = await api.sendMessage(`⏳ جاري معالجة: ${v.title}...`, threadID, messageID);
-
-    const stream = ytdl(url, { filter: "audioonly", quality: "highestaudio" });
+    const info = await ytdl.getInfo(url, {
+        requestOptions: {
+            headers: {
+                cookie: "" // (اختياري) يمكنك وضع الكوكيز هنا إذا استمرت المشاكل
+            }
+        }
+    });
     
-    stream.pipe(fs.createWriteStream(cachePath)).on("finish", async () => {
+    const v = info.videoDetails;
+    
+    // التحقق من الحجم قبل البدء (تقريبي)
+    const audioFormat = ytdl.chooseFormat(info.formats, { quality: 'highestaudio' });
+    
+    const stream = ytdl.downloadFromInfo(info, {
+      filter: "audioonly",
+      quality: "highestaudio",
+      highWaterMark: 1 << 25 // زيادة حجم البافر لتجنب التقطيع
+    });
+
+    const fileStream = fs.createWriteStream(cachePath);
+    stream.pipe(fileStream);
+
+    fileStream.on("finish", async () => {
       const stats = fs.statSync(cachePath);
       const fileSize = (stats.size / (1024 * 1024)).toFixed(2);
 
-      if (stats.size > 83886080) { 
-        fs.unlinkSync(cachePath);
-        return api.editMessage("❌ الملف ضخم جداً (أكبر من 80MB).", wait.messageID, threadID);
+      if (stats.size > 83886080) { // 80MB
+        if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+        return api.editMessage("❌ الملف ضخم جداً (أكبر من 80MB).", waitMessageID, threadID);
       }
 
-      // إرسال الملف مع التفاصيل الكاملة
       const caption = `✅ تـم الـتـحـمـيـل بـنـجـاح\n` +
                       `━━━━━━━━━━━━━━━\n` +
                       `🎼 الـعـنـوان: ${v.title}\n` +
                       `👤 الـقـنـاة: ${v.author.name}\n` +
                       `⏳ الـمـدة: ${Math.floor(v.lengthSeconds / 60)} دقيقة\n` +
-                      `📅 الـنـشر: ${v.publishDate}\n` +
                       `📦 الـحـجـم: ${fileSize} MB\n` +
                       `━━━━━━━━━━━━━━━\n` +
                       `『 ⚙︎ ڪايࢪوس  ͡🦋͜  𝑩𝑶𝑻 』`;
@@ -101,14 +120,22 @@ async function downloadAudio(api, threadID, messageID, url) {
       await api.sendMessage({
         body: caption,
         attachment: fs.createReadStream(cachePath)
-      }, threadID, messageID);
+      }, threadID, () => {
+          if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+      }, messageID);
 
-      api.unsendMessage(wait.messageID);
+      api.unsendMessage(waitMessageID);
       api.setMessageReaction("✅", messageID, () => {}, true);
-      fs.unlinkSync(cachePath);
+    });
+
+    fileStream.on("error", (err) => {
+        throw err;
     });
 
   } catch (err) {
-    api.sendMessage("❌ حدث خطأ أثناء التحميل.", threadID, messageID);
+    console.error(err);
+    if (waitMessageID) api.unsendMessage(waitMessageID);
+    api.sendMessage(`❌ فشل التحميل. (قد يكون الفيديو محمي أو السيرفر محظور من يوتيوب)`, threadID, messageID);
+    if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
   }
 }
