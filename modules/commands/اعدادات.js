@@ -13,23 +13,26 @@ module.exports.run = async function ({ api, event, Threads }) {
     const { threadID, messageID } = event;
     let data = (await Threads.getData(threadID)).data || {};
     
-    // الإعدادات الافتراضية (❌)
+    // الإعدادات الافتراضية (⬜)
     if (!data.antiSettings) {
-        data.antiSettings = { antiSpam: false, antiName: false, antiImage: false, antiNickname: false, notify: false };
+        data.antiSettings = { antiSpam: false, antiName: false, antiImage: false, antiNickname: false, notifications: true };
     }
 
     const s = data.antiSettings;
-    const menu = `╭─────────────╮\n` +
-                 `  ⌈ اعـدادات الـمـجـموعـة ⌋\n` +
-                 `╰─────────────╯\n\n` +
-                 `1. [${s.antiSpam ? "✅" : "❌"}] مكافحة الازعاج\n` +
-                 `2. [${s.antiName ? "✅" : "❌"}] مكافحة تغيير الاسم\n` +
-                 `3. [${s.antiImage ? "✅" : "❌"}] مكافحة تغيير الصورة\n` +
-                 `4. [${s.antiNickname ? "✅" : "❌"}] مكافحة تغيير الكنية\n` +
-                 `5. [${s.notify ? "✅" : "❌"}] اخطار احداث المجموعة\n\n` +
-                 `«— رد بـ أرقام الإعدادات —»\n` +
-                 `💡 يمكنك كتابة الأرقام عمودياً:\n` +
-                 `1\n2\n4`;
+    const menu = `◤━━━━━━━━━━◥\n` +
+                 `    ⚙️ *الاعدادات* ⚙️\n` +
+                 `◣━━━━━━━━━━◢\n\n` +
+                 `◈ ━━━━━━━━━━━ ◈\n` +
+                 ` 1. مكافحة الازعاج  ${s.antiSpam ? "▣" : "□"}\n` +
+                 ` 2. مكافحة تغيير الاسم  ${s.antiName ? "▣" : "□"}\n` +
+                 ` 3. مكافحة تغيير الصورة  ${s.antiImage ? "▣" : "□"}\n` +
+                 ` 4. مكافحة تغيير الكنية  ${s.antiNickname ? "▣" : "□"}\n` +
+                 ` 5. الاشعارات  ${s.notifications ? "▣" : "□"}\n` +
+                 `◈ ━━━━━━━━━━━ ◈\n\n` +
+                 `⌲ *الرد بالارقام المطلوبة*\n` +
+                 `⌲ مثال: 1 3 5\n` +
+                 `⌲ او بالاسطر: 1⇣3⇣5\n\n` +
+                 `▰▰▰▰▰▰▰▰▰▰`;
 
     return api.sendMessage(menu, threadID, (err, info) => {
         global.client.handleReply.push({
@@ -45,7 +48,7 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
     const { threadID, body, senderID, messageID } = event;
     if (senderID != handleReply.author) return;
 
-    const choices = body.match(/\d+/g); // استخراج كل الأرقام من الرسالة
+    const choices = body.match(/\d+/g);
     if (!choices) return;
 
     let s = handleReply.settings;
@@ -54,10 +57,10 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         if (num == "2") s.antiName = !s.antiName;
         if (num == "3") s.antiImage = !s.antiImage;
         if (num == "4") s.antiNickname = !s.antiNickname;
-        if (num == "5") s.notify = !s.notify;
+        if (num == "5") s.notifications = !s.notifications;
     });
 
-    return api.sendMessage("⚠️ تفاعل بـ 👍 على هذه الرسالة لتأكيد التغييرات وأخذ نسخة من حالة المجموعة.", threadID, (err, info) => {
+    return api.sendMessage("◈ ━━━━━━━ ◈\n🔔 *تأكيد التغييرات*\n◈ ━━━━━━━ ◈\n\n⟡ تفاعل بــ 👍 على هذه الرسالة\n⟡ لتثبيت الاعدادات الجديدة\n\n▰▰▰▰▰▰▰▰▰▰", threadID, (err, info) => {
         global.client.handleReaction.push({
             name: this.config.name,
             messageID: info.messageID,
@@ -78,19 +81,17 @@ module.exports.handleReaction = async function ({ api, event, handleReaction, Th
     let finalSettings = handleReaction.newSettings;
     let warning = "";
 
-    // فحص صلاحية الإدمن للبوت
     if (!isAdmin) {
         if (finalSettings.antiImage || finalSettings.antiNickname) {
             finalSettings.antiImage = false;
             finalSettings.antiNickname = false;
-            warning = "\n\n⚠️ تنبيه: البوت ليس إدمن، تم تعطيل حماية (الصورة/الكنية) تلقائياً.";
+            warning = "\n\n⚠️ *تنبيه:* البوت ليس ادمن\nتم تعطيل حماية (الصورة/الكنية) تلقائياً";
         }
     }
 
     let data = (await Threads.getData(threadID)).data || {};
     data.antiSettings = finalSettings;
     
-    // حفظ اللقطة (Snapshot)
     data.snapshot = {
         name: threadInfo.threadName,
         imageSrc: threadInfo.imageSrc,
@@ -98,5 +99,13 @@ module.exports.handleReaction = async function ({ api, event, handleReaction, Th
     };
 
     await Threads.setData(threadID, { data });
-    return api.sendMessage(`✅ [Anti-out] تم حفظ الإعدادات بنجاح!${warning}`, threadID);
+    
+    const confirmMsg = `◤━━━━━━━━◥\n` +
+                      `   ✅ *تم الحفظ*\n` +
+                      `◣━━━━━━━━◢\n\n` +
+                      `⟡ تم تحديث الاعدادات بنجاح\n` +
+                      `${warning}\n\n` +
+                      `▰▰▰▰▰▰▰▰▰▰`;
+    
+    return api.sendMessage(confirmMsg, threadID);
 };
