@@ -5,16 +5,16 @@ const moment = require("moment-timezone");
 const chalk = require("chalk");
 const CFonts = require("cfonts");
 const { spawn } = require("child_process");
-const axios = require("axios"); // 🆕 إضافة axios للـ Self-ping
+const axios = require("axios");
 const logger = require("./utils/log");
 
 // ======================
-// 🔒 Anti Duplicate Lock
+// 🔒 Anti Duplicate
 // ======================
 const lockFile = path.join(__dirname, "bot.lock");
 
 if (fs.existsSync(lockFile)) {
-  console.log("⚠️ Bot already running, exit.");
+  console.log("⚠️ Bot already running");
   process.exit(0);
 }
 
@@ -28,30 +28,25 @@ process.on("SIGINT", () => process.exit());
 process.on("SIGTERM", () => process.exit());
 
 // ======================
-// 🌐 Express Server (Keep Alive)
+// 🌐 Express Server
 // ======================
 const app = express();
 const PORT = process.env.PORT || 2006;
 
 app.get("/", (req, res) => {
   res.send(`
-    <style>
-      body { font-family: monospace; text-align: center; background: #111; color: #fff; padding-top: 50px; }
-      h1 { color: #0f0; }
-      p { color: #aaa; }
-    </style>
-    <h1>◸——— SAIKO BOT ONLINE ———◹</h1>
-    <p>⌬ STATUS: IMMORTAL MODE ⌬</p>
+    <h1>SAIKO BOT ONLINE</h1>
+    <p>STATUS: RUNNING</p>
     <p>TIME: ${moment.tz("Asia/Ho_Chi_Minh").format("HH:mm:ss")}</p>
   `);
 });
 
 app.listen(PORT, () => {
-  console.log(chalk.green(`🌍 Web server running on port ${PORT}`));
+  console.log(chalk.green(`🌍 Server port ${PORT}`));
 });
 
 // ======================
-// ⏰ Time & Date
+// ⏰ Time
 // ======================
 const timeNow = moment.tz("Asia/Ho_Chi_Minh").format("HH:mm:ss || D/MM/YYYY");
 let dayName = moment.tz("Asia/Ho_Chi_Minh").format("dddd");
@@ -69,7 +64,7 @@ const days = {
 dayName = days[dayName] || dayName;
 
 // ======================
-// 🎨 Console Intro
+// 🎨 Intro
 // ======================
 CFonts.say("SAIKO", {
   font: "block",
@@ -77,62 +72,74 @@ CFonts.say("SAIKO", {
   gradient: ["red", "magenta"]
 });
 
-CFonts.say("Bot Messenger Powered By SAIKO 🚀", {
-  font: "simple",
-  align: "center",
-  gradient: ["cyan", "blue"]
-});
-
 console.log(
   chalk.cyanBright(
-    `\n◸————————————————————————◹\n` +
-    ` ⌬ SAIKO BOT READY AT ${timeNow} ⌬\n` +
+    `\n◸—————◹\n` +
+    ` ⌬ ${timeNow} ⌬\n` +
     ` ⌬ ${dayName} ⌬\n` +
-    `◺————————————————————————◿\n`
+    `◺—————◿\n`
   )
 );
 
 // ======================
-// 🤖 Start Bot (IMMORTAL LOOP)
+// 🤖 Start Bot
 // ======================
+let botProcess = null;
+let failCount = 0;
+
 function startBot(msg) {
   if (msg) logger(msg, "SYSTEM");
 
-  const bot = spawn("node", ["main.bot.js"], {
+  failCount++;
+  if (failCount > 5) {
+    setTimeout(() => {
+      failCount = 0;
+      startBot("Retry");
+    }, 120000);
+    return;
+  }
+
+  botProcess = spawn("node", ["main.bot.js"], {
     cwd: __dirname,
     stdio: "inherit",
     shell: true
   });
 
-  bot.on("close", (code) => {
-    console.log(chalk.red(`\n🛑 Bot stopped with code ${code}.`));
-    console.log(chalk.yellow("🔄 Restarting Bot automatically..."));
-    setTimeout(() => startBot("Bot restarted"), 5000); // إعادة تشغيل مستمرة
+  botProcess.on("close", (code) => {
+    console.log(chalk.red(`🛑 Bot exited (${code})`));
+    setTimeout(() => startBot("Restart"), code === 0 ? 10000 : 5000);
   });
 
-  bot.on("error", (err) => {
-    logger("Bot error: " + err, "ERROR");
+  botProcess.on("error", (err) => {
+    logger("Error: " + err, "ERROR");
+    setTimeout(() => startBot("Restart"), 5000);
+  });
+  
+  botProcess.on("spawn", () => {
+    failCount = 0;
   });
 }
 
-// ======================
-// 🚀 Launch & Keep Alive
-// ======================
 setTimeout(() => {
-  console.log(chalk.green("🚀 Launching SAIKO BOT...\n"));
-  startBot("SAIKO POWER-UP ⚡");
+  console.log(chalk.green("🚀 Starting..."));
+  startBot("Start ⚡");
 }, 100);
 
-// 🆕 خدعة Self-Ping لضمان النشاط الدائم
+// ======================
+// ♻️ Keep Alive
+// ======================
 setInterval(() => {
   axios.get(`http://localhost:${PORT}`).catch(() => {});
-  console.log(chalk.gray("💓 Heartbeat: Bot is alive.."));
-}, 4 * 60 * 1000); // كل 4 دقائق
+}, 4 * 60 * 1000);
 
-// ======================
-// ♻️ Daily Restart
-// ======================
+setInterval(() => {
+  if (!botProcess || botProcess.killed) {
+    startBot("Auto-restart");
+  }
+}, 60000);
+
 setTimeout(() => {
-  console.log(chalk.magenta("♻️ Daily restart triggered by IMMORTAL MODE"));
-  process.exit(1);
+  console.log(chalk.magenta("♻️ 24h restart"));
+  if (botProcess && !botProcess.killed) botProcess.kill('SIGTERM');
+  setTimeout(() => process.exit(0), 3000);
 }, 24 * 60 * 60 * 1000);
