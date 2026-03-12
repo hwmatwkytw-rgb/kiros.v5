@@ -1,9 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 
-// 🔒 إنشاء مجلد cache ثابت لا يتم مسحه في الاستضافة
-const cacheDir = path.join(__dirname, "cache");
-if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
+// 🔒 إنشاء مجلد cache في مسار ثابت للاستضافة
+const cacheDir = path.join(process.cwd(), "cache"); // استخدام process.cwd() بدلاً من __dirname
+if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
 // 📁 قاعدة البيانات الخاصة بالكلمات المتعلمة
 const learnedPath = path.join(cacheDir, "learned.json");
@@ -36,8 +36,12 @@ module.exports.config = {
 
 // ✨ التحقق إذا المرسل أدمن
 async function isAdmin(api, threadID, senderID) {
-  const info = await api.getThreadInfo(threadID);
-  return info.adminIDs.some(ad => ad.id == senderID);
+  try {
+    const info = await api.getThreadInfo(threadID);
+    return info.adminIDs.some(ad => ad.id == senderID);
+  } catch (error) {
+    return false;
+  }
 }
 
 module.exports.run = async function ({ api, event, args }) {
@@ -49,30 +53,30 @@ module.exports.run = async function ({ api, event, args }) {
     return api.sendMessage(
       "⚙️ **أوامر نظام التعلم**:\n\n" +
       "📘 إضافة رد:\nتعلم الكلمة => الرد\n\n" +
-      "🛡 أوامر الأدمن فقط:\nتعلم تعديل الكلمة => الرد الجديد\nتعلم حذف الكلمة\nتعلم قائمة\nتعلم كارلوس on\nتعلم كارلوس off",
+      "🛡 أوامر الأدمن فقط:\nتعلم تعديل الكلمة => الرد الجديد\nتعلم حذف الكلمة\nتعلم قائمة\nتعلم كايروس on\nتعلم كايروس off",
       event.threadID,
       event.messageID
     );
   }
 
-  // 🔥 تشغيل كارلوس
-  if (text === "كارلوس on") {
+  // 🔥 تشغيل كايروس
+  if (text === "كايروس on") {
     if (!(await isAdmin(api, event.threadID, sender)))
       return api.sendMessage("❌ هذا الأمر للأدمن فقط.", event.threadID);
 
     carlos.status = "on";
     saveCarlos();
-    return api.sendMessage("⚡ تم تشغيل وضع **كارلوس** — البوت سيرد على أي كلمة متعلمة.", event.threadID);
+    return api.sendMessage("⚡ انبح عايز شنو 🐸", event.threadID);
   }
 
-  // 🛑 إيقاف كارلوس
-  if (text === "كارلوس off") {
+  // 🛑 إيقاف كايروس
+  if (text === "كايروس off") {
     if (!(await isAdmin(api, event.threadID, sender)))
       return api.sendMessage("❌ هذا الأمر للأدمن فقط.", event.threadID);
 
     carlos.status = "off";
     saveCarlos();
-    return api.sendMessage("🛑 تم إيقاف وضع **كارلوس** — البوت سيرد فقط على: كايروس الكلمة", event.threadID);
+    return api.sendMessage("⚡ ciros th off", event.threadID);
   }
 
   // 📜 قائمة الردود
@@ -149,7 +153,7 @@ module.exports.handleEvent = function ({ api, event }) {
   const msg = event.body;
   if (!msg) return;
 
-  // كارلوس ON — يرد على أي كلمة
+  // كايروس ON — يرد على أي كلمة
   if (carlos.status === "on") {
     const w = msg.trim();
     if (learned[w])
