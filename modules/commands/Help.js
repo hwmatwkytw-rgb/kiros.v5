@@ -1,129 +1,165 @@
+const formatter = require('../utils/formatter');
+
 module.exports.config = {
   name: "اوامر",
-  version: "1.3.5",
+  version: "2.0.0",
   hasPermssion: 0,
-  credits: "ᏦᎥᏒᏫᎦ ᏚᎮᎯᏒᎠᎯ",
-  description: "قائمة الأوامر الملكية - صفحتين - فلترة ودمج ذكي - استايل رفيع",
-  commandCategory: "نظام",
-  usages: "[رقم الصفحة]",
+  credits: "N-Dora Team",
+  description: "عرض قائمة الأوامر الكاملة مع التفاصيل",
+  commandCategory: "النظام",
+  usages: "[اسم الأمر]",
   cooldowns: 5,
   envConfig: {
     autoUnsend: false,
-    delayUnsend: 20
+    delayUnsend: 300
   }
 };
 
 module.exports.languages = {
   "ar": {
-    "moduleInfo": "─── ᏦᎥᏒᏫᎦ ᏚᎮᎯᏒᎠᎯ ───\n\n🔹 الأسم ➟ [ %1 ]\n🔹 الوصف ➟ %2\n🔹 الاستخدام ➟ %3\n🔹 الفئة ➟ %4\n🔹 الانتظار ➟ %5 ثانية\n🔹 الإذن ➟ %6\n\n──────────────────",
-    "user": "مستخدم عادي",
-    "adminGroup": "إدمن المجموعة",
-    "adminBot": "مطور البوت"
+    "moduleInfo": `${formatter.header('معلومات الأمر')}
+${formatter.emojis.message} الاسم: %1
+${formatter.emojis.info} الوصف: %2
+${formatter.emojis.gear} الاستخدام: %3
+${formatter.emojis.folder} الفئة: %4
+${formatter.emojis.hourglass} المهلة الزمنية: %5 ثانية
+${formatter.emojis.lock} الصلاحية: %6
+${formatter.emojis.star} المطور: %7
+${formatter.borders.simple}`,
+    "helpList": `${formatter.header('قائمة الأوامر')}
+${formatter.emojis.rocket} يوجد %1 أمر متاح في البوت!
+${formatter.emojis.info} استخدم: "%2اوامر [اسم الأمر]" لمعرفة تفاصيل الأمر
+${formatter.borders.simple}`,
+    "user": `${formatter.emojis.user} مستخدم عادي`,
+    "adminGroup": `${formatter.emojis.crown} مسؤول المجموعة`,
+    "adminBot": `${formatter.emojis.diamond} مسؤول البوت`,
+    "pageInfo": `الصفحة: %1/%2`,
+    "totalCommands": `إجمالي الأوامر: %1`
+  },
+  "en": {
+    "moduleInfo": `${formatter.header('Command Information')}
+${formatter.emojis.message} Name: %1
+${formatter.emojis.info} Description: %2
+${formatter.emojis.gear} Usage: %3
+${formatter.emojis.folder} Category: %4
+${formatter.emojis.hourglass} Cooldown: %5 seconds
+${formatter.emojis.lock} Permission: %6
+${formatter.emojis.star} Developer: %7
+${formatter.borders.simple}`,
+    "helpList": `${formatter.header('Commands List')}
+${formatter.emojis.rocket} There are %1 available commands in the bot!
+${formatter.emojis.info} Use: "%2help [command name]" to see command details
+${formatter.borders.simple}`,
+    "user": `${formatter.emojis.user} Regular User`,
+    "adminGroup": `${formatter.emojis.crown} Group Admin`,
+    "adminBot": `${formatter.emojis.diamond} Bot Admin`,
+    "pageInfo": `Page: %1/%2`,
+    "totalCommands": `Total Commands: %1`
   }
 };
 
-module.exports.run = async function({ api, event, args, getText }) {
-  const axios = require("axios");
+module.exports.handleEvent = function ({ api, event, getText }) {
+  const { commands } = global.client;
+  const { threadID, messageID, body } = event;
+
+  if (!body || typeof body !== "string" || body.indexOf("اوامر") !== 0) return;
+  
+  const splitBody = body.slice(body.indexOf("اوامر")).trim().split(/\s+/);
+  if (splitBody.length === 1 || !commands.has(splitBody[1].toLowerCase())) return;
+
+  const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
+  const command = commands.get(splitBody[1].toLowerCase());
+  const prefix = (threadSetting.hasOwnProperty("PREFIX")) ? threadSetting.PREFIX : global.config.PREFIX;
+
+  const info = getText("moduleInfo",
+    command.config.name,
+    command.config.description,
+    `${prefix}${command.config.name} ${(command.config.usages) ? command.config.usages : ""}`,
+    command.config.commandCategory,
+    command.config.cooldowns,
+    ((command.config.hasPermssion === 0) ? getText("user") :
+      (command.config.hasPermssion === 1) ? getText("adminGroup") : getText("adminBot")),
+    command.config.credits
+  );
+
+  return api.sendMessage(info, threadID, messageID);
+};
+
+module.exports.run = function ({ api, event, args, getText }) {
   const { commands } = global.client;
   const { threadID, messageID } = event;
+  const command = commands.get((args[0] || "").toLowerCase());
+  const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
+  const prefix = (threadSetting.hasOwnProperty("PREFIX")) ? threadSetting.PREFIX : global.config.PREFIX;
 
-  // رابط الصورة المباشر المحدث
-  const imgURL = "https://i.ibb.co/DgYq3fqw/1771594045409.png";
+  if (!command) {
+    // Show all commands with pagination
+    const arrayInfo = [];
+    const page = parseInt(args[0]) || 1;
+    const itemsPerPage = 15;
 
-  try {
-    const image = (await axios.get(imgURL, { responseType: "stream" })).data;
-
-    const command = commands.get((args[0] || "").toLowerCase());
-    const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
-    const prefix = threadSetting.PREFIX || global.config.PREFIX;
-
-    if (!command) {
-      let categories = {};
-      let miscCommands = [];
-
-      // 1. تجميع الأوامر وفلترة قسم المطور نهائياً (نفس البنية الأصلية)
-      for (let [name, value] of commands) {
-        const config = value.config;
-        const cat = config.commandCategory || "عام";
-
-        if (cat.toLowerCase().includes("مطور") || cat.toLowerCase().includes("dev")) continue;
-        
-        if (!categories[cat]) categories[cat] = [];
-        categories[cat].push(name);
-      }
-
-      // 2. منطق الدمج الذكي (نفس البنية الأصلية)
-      let finalCategories = {};
-      for (let cat in categories) {
-        if (categories[cat].length <= 2) {
-          miscCommands.push(...categories[cat]);
-        } else {
-          finalCategories[cat] = categories[cat];
-        }
-      }
-      if (miscCommands.length > 0) finalCategories["أوامر متنوعة"] = miscCommands;
-
-      const categoryMap = {
-        "نظام": "SYSTΞM",
-        "ترفية": "ΞNTΞRTAINMΞNT",
-        "اقتصاد": "ΞCONOMY",
-        "العاب": "GAMΞS",
-        "ذكاء صناعي": "AI-PROTOCOL",
-        "أوامر متنوعة": "MISCΞLLANΞOUS",
-        "عام": "GΞNΞRAL"
-      };
-
-      let blocks = [];
-      let count = 0;
-
-      // 3. بناء كتل الأقسام بالاستايل الرفيع والزوايا
-      for (let cat in finalCategories) {
-        const cmds = finalCategories[cat].sort();
-        let block = `┌─── ● ${categoryMap[cat] || cat.toUpperCase()} ● ───┐\n`;
-
-        for (let i = 0; i < cmds.length; i += 3) {
-          // استخدام • كفاصلة بين الأوامر
-          const row = cmds.slice(i, i + 3).join("  •  ");
-          block += `  ${row}\n`;
-          count += cmds.slice(i, i + 3).length;
-        }
-        block += `└───────────────────┘`;
-        blocks.push(block.trim());
-      }
-
-      // 4. تقسيم الأوامر على صفحتين فقط (نفس البنية الأصلية)
-      const totalPages = 2;
-      const perPage = Math.ceil(blocks.length / totalPages);
-      const page = parseInt(args[0]) || 1;
-
-      if (page < 1 || page > totalPages)
-        return api.sendMessage(`⚠️ القائمة تتكون من ${totalPages} صفحات فقط. اختر صفحة صحيحة.`, threadID, messageID);
-
-      const start = (page - 1) * perPage;
-      const end = start + perPage;
-      const finalBlocks = blocks.slice(start, end).join("\n\n");
-
-      // 5. بناء الرسالة النهائية مع الأذكار والخاتمة المطلوبة
-      const msg = `─── KIROS COMMAND ───\n\n${finalBlocks}\n\n──────────────────\n📊 الأوامر: [ ${count} ]  |  📑 الصفحة: [ ${page} / ${totalPages} ]\n💡 استخدم: ${prefix}اوامر [اسم الأمر] للتفاصيل\n\nاستغفر الله العظيم واتوب اليه 🌸\nاللهم صلِّ وسلم على سيدنا محمد 🤍🍂`;
-
-      return api.sendMessage({ body: msg, attachment: image }, threadID);
+    for (const [name] of commands) {
+      arrayInfo.push(name);
     }
 
-    // 5. عرض تفاصيل أمر محدد (نفس البنية الأصلية)
-    return api.sendMessage(
-      getText(
-        "moduleInfo",
-        command.config.name,
-        command.config.description,
-        `${prefix}${command.config.name} ${(command.config.usages) ? command.config.usages : ""}`,
-        command.config.commandCategory,
-        command.config.cooldowns,
-        (command.config.hasPermssion == 0) ? getText("user") : (command.config.hasPermssion == 1) ? getText("adminGroup") : getText("adminBot")
-      ),
-      threadID,
-      messageID
-    );
-  } catch (err) {
-    return api.sendMessage("❌ عذراً، تعذر تحميل القائمة حالياً.", threadID, messageID);
+    arrayInfo.sort();
+
+    const totalPages = Math.ceil(arrayInfo.length / itemsPerPage);
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const pageCommands = arrayInfo.slice(startIndex, endIndex);
+
+    let msg = getText("helpList", commands.size, prefix);
+    msg += "\n\n";
+
+    // Group by category
+    const categories = {};
+    for (const cmdName of pageCommands) {
+      const cmd = commands.get(cmdName);
+      const category = cmd.config.commandCategory || "أخرى";
+      
+      if (!categories[category]) {
+        categories[category] = [];
+      }
+      categories[category].push(cmdName);
+    }
+
+    for (const [category, cmds] of Object.entries(categories)) {
+      msg += `${formatter.emojis.folder} ${category}\n`;
+      cmds.forEach((cmd, index) => {
+        msg += formatter.listItem(index + 1, cmd, `${index + 1}️⃣`);
+        msg += "\n";
+      });
+      msg += "\n";
+    }
+
+    msg += formatter.borders.simple + "\n";
+    msg += `${formatter.emojis.info} ${getText("pageInfo", page, totalPages)}\n`;
+    msg += `${formatter.emojis.rocket} ${getText("totalCommands", commands.size)}\n`;
+    msg += `${formatter.emojis.gear} البادئة: ${prefix}`;
+
+    return api.sendMessage(msg, threadID, async (error, info) => {
+      if (error) return;
+      
+      const { autoUnsend, delayUnsend } = global.configModule[this.config.name];
+      if (autoUnsend) {
+        await new Promise(resolve => setTimeout(resolve, delayUnsend * 1000));
+        return api.unsendMessage(info.messageID);
+      }
+    });
   }
+
+  // Show specific command info
+  const info = getText("moduleInfo",
+    command.config.name,
+    command.config.description,
+    `${prefix}${command.config.name} ${(command.config.usages) ? command.config.usages : ""}`,
+    command.config.commandCategory,
+    command.config.cooldowns,
+    ((command.config.hasPermssion === 0) ? getText("user") :
+      (command.config.hasPermssion === 1) ? getText("adminGroup") : getText("adminBot")),
+    command.config.credits
+  );
+
+  return api.sendMessage(info, threadID, messageID);
 };
