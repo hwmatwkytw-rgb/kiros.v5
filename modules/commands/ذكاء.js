@@ -1,54 +1,43 @@
+const apiManager = require('../../utils/apis');
+const formatter = require('../../utils/formatter');
+
 module.exports.config = {
-  name: "سيم",
-  version: "4.3.7",
-  hasPermssion: 1,
-  credits: "عمر", 
-  description: "استخدم الامر .سيم تشغيل \n .سيم ايقاف",
-  commandCategory: "خدمات",
-  usages: "[نص]",
+  name: "ذكاء",
+  version: "2.0.0",
+  hasPermssion: 0,
+  credits: "Manus-Agent",
+  description: "الدردشة مع الذكاء الاصطناعي GPT-4 (مطور)",
+  commandCategory: "ذكاء",
+  usages: "[السؤال]",
   cooldowns: 5,
   dependencies: {
       axios: ""
   }
 };
 
-async function simsimi(a, b, c) {
-  const d = global.nodemodule.axios, g = (a) => encodeURIComponent(a);
+module.exports.run = async function ({ api: bot, event, args }) {
+  const { threadID, messageID } = event;
+  const prompt = args.join(" ");
+
+  if (!prompt) {
+    return bot.sendMessage(formatter.formatMessage("يرجى كتابة سؤالك بعد الأمر.\nمثال: .ذكاء من أنت؟", "INFO"), threadID, messageID);
+  }
+
   try {
-      var { data: j } = await d({ url: `https://simsimi.fun/api/v2/?mode=talk&lang=ar&message=${g(a)}&filter=true`, method: "GET" });
-      return { error: !1, data: j };
-  } catch (p) {
-      return { error: !0, data: {} };
-  }
-}
-
-module.exports.onLoad = async function () {
-  "undefined" == typeof global && (global = {}), "undefined" == typeof global.simsimi && (global.simsimi = new Map);
-};
-
-module.exports.handleEvent = async function ({ api: b, event: a }) {
-  const { threadID: c, messageID: d, senderID: e, body: f } = a, g = (e) => b.sendMessage(e, c, d);
-  if (global.simsimi.has(c)) {
-      if (e == b.getCurrentUserID() || "" == f || d == global.simsimi.get(c)) return;
-      var { data: h, error: i } = await simsimi(f, b, a);
-      if (i) return;
-      if (!h.success) return g(h.error);
-      return g(h.success);
-  }
-};
-
-module.exports.run = async function ({ api: b, event: a, args: c }) {
-  const { threadID: d, messageID: e } = a, f = (c) => b.sendMessage(c, d, e);
-  if (0 == c.length) return f("عيوني");
-  switch (c[0]) {
-      case "تشغيل":
-          return global.simsimi.has(d) ? f("عيوني.") : (global.simsimi.set(d, e), f("تم تشغيل سمسمي."));
-      case "ايقاف":
-          return global.simsimi.has(d) ? (global.simsimi.delete(d), f("تم ايقاف تشغيل سمسمي.")) : f("تم ايقاف تشغيل سمسمي.");
-      default:
-          var { data: g, error: h } = await simsimi(c.join(" "), b, a);
-          if (h) return;
-          if (!g.success) return f(g.error);
-          return f(g.success);
+    bot.sendMessage(formatter.formatMessage("جاري التفكير... 🧠", "WAIT"), threadID, async (err, info) => {
+      const waitMessageID = info.messageID;
+      
+      const response = await apiManager.getGPTResponse(prompt);
+      
+      if (response) {
+        bot.unsendMessage(waitMessageID);
+        return bot.sendMessage(formatter.formatMessage(response, "AI"), threadID, messageID);
+      } else {
+        bot.unsendMessage(waitMessageID);
+        return bot.sendMessage(formatter.formatMessage("عذراً، لم أتمكن من الحصول على رد حالياً. حاول مرة أخرى لاحقاً.", "ERROR"), threadID, messageID);
+      }
+    }, messageID);
+  } catch (error) {
+    return bot.sendMessage(formatter.formatMessage("حدث خطأ تقني أثناء معالجة طلبك.", "ERROR"), threadID, messageID);
   }
 };

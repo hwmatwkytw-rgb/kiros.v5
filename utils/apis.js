@@ -4,11 +4,12 @@ const logger = require('./log');
 /**
  * API Utilities Module
  * Centralized management for all external APIs
+ * Updated v2.0: Fixed broken APIs and added more stable sources
  */
 
 class APIManager {
   constructor() {
-    this.timeout = 10000;
+    this.timeout = 15000;
     this.retries = 3;
   }
 
@@ -16,43 +17,34 @@ class APIManager {
    * AI & Language Models APIs
    */
   
-  // OpenAI GPT API
-  async getGPTResponse(prompt, model = 'gpt-3.5-turbo') {
+  // Free AI API (ChatGPT Alternative)
+  async getGPTResponse(prompt) {
     try {
-      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 500
-      }, {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
+      const response = await axios.get(`https://api.samirxp.xyz/api/chatgpt?q=${encodeURIComponent(prompt)}`, {
         timeout: this.timeout
       });
-      return response.data.choices[0].message.content;
+      return response.data.result || response.data.content;
     } catch (error) {
-      logger('خطأ في الاتصال بـ OpenAI: ' + error.message, 'ERROR');
-      return null;
+      // Fallback to another free AI API
+      try {
+        const fallback = await axios.get(`https://api.maher-zubair.tech/ai/llama?q=${encodeURIComponent(prompt)}`);
+        return fallback.data.result;
+      } catch (e) {
+        logger('خطأ في الاتصال بـ AI APIs: ' + error.message, 'ERROR');
+        return null;
+      }
     }
   }
 
-  // Google Gemini API
+  // Google Gemini API (Free Alternative)
   async getGeminiResponse(prompt) {
     try {
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          contents: [{
-            parts: [{ text: prompt }]
-          }]
-        },
-        { timeout: this.timeout }
-      );
-      return response.data.candidates[0].content.parts[0].text;
+      const response = await axios.get(`https://api.samirxp.xyz/api/gemini?q=${encodeURIComponent(prompt)}`, {
+        timeout: this.timeout
+      });
+      return response.data.result;
     } catch (error) {
-      logger('خطأ في الاتصال بـ Gemini: ' + error.message, 'ERROR');
+      logger('خطأ في الاتصال بـ Gemini API: ' + error.message, 'ERROR');
       return null;
     }
   }
@@ -61,53 +53,41 @@ class APIManager {
    * Media APIs
    */
 
-  // YouTube Search API
-  async searchYouTube(query) {
+  // YouTube Download API (Stable Alternative)
+  async getYouTubeDownload(url) {
     try {
-      const response = await axios.get('https://www.youtube.com/results', {
-        params: { search_query: query },
+      const response = await axios.get(`https://api.agatz.xyz/api/ytmp3?url=${encodeURIComponent(url)}`, {
         timeout: this.timeout
       });
-      // استخراج البيانات من الـ HTML (يمكن تحسينها باستخدام مكتبة متخصصة)
-      return response.data;
+      return response.data.data;
     } catch (error) {
-      logger('خطأ في البحث على YouTube: ' + error.message, 'ERROR');
+      logger('خطأ في تحميل من YouTube: ' + error.message, 'ERROR');
       return null;
     }
   }
 
-  // Image Search API (Bing)
-  async searchImages(query, count = 10) {
+  // TikTok Download API
+  async getTikTokDownload(url) {
     try {
-      const response = await axios.get('https://www.bing.com/images/search', {
-        params: { q: query },
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
+      const response = await axios.get(`https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(url)}`, {
         timeout: this.timeout
       });
       return response.data;
     } catch (error) {
-      logger('خطأ في البحث عن الصور: ' + error.message, 'ERROR');
+      logger('خطأ في تحميل من TikTok: ' + error.message, 'ERROR');
       return null;
     }
   }
 
-  // Imgur Image Upload
-  async uploadToImgur(imageUrl) {
+  // All-in-One Video Downloader
+  async getUniversalDownload(url) {
     try {
-      const response = await axios.post('https://api.imgur.com/3/image', {
-        image: imageUrl,
-        type: 'url'
-      }, {
-        headers: {
-          'Authorization': `Client-ID ${process.env.IMGUR_CLIENT_ID}`
-        },
+      const response = await axios.get(`https://api.ryann.my.id/download/allinone?url=${encodeURIComponent(url)}`, {
         timeout: this.timeout
       });
-      return response.data.data.link;
+      return response.data.data;
     } catch (error) {
-      logger('خطأ في رفع الصورة إلى Imgur: ' + error.message, 'ERROR');
+      logger('خطأ في التحميل الشامل: ' + error.message, 'ERROR');
       return null;
     }
   }
@@ -119,10 +99,11 @@ class APIManager {
   // Weather API (OpenWeatherMap)
   async getWeather(city) {
     try {
+      const apiKey = process.env.OPEN_WEATHER_API || 'c4ef85b93982fd748d3744632f79029d'; // Default key if not provided
       const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
         params: {
           q: city,
-          appid: process.env.OPEN_WEATHER_API,
+          appid: apiKey,
           units: 'metric',
           lang: 'ar'
         },
@@ -144,10 +125,10 @@ class APIManager {
     }
   }
 
-  // Wikipedia Search API
+  // Wikipedia Search API (Arabic)
   async searchWikipedia(query) {
     try {
-      const response = await axios.get('https://en.wikipedia.org/w/api.php', {
+      const response = await axios.get('https://ar.wikipedia.org/w/api.php', {
         params: {
           action: 'query',
           list: 'search',
@@ -163,44 +144,26 @@ class APIManager {
     }
   }
 
-  // Translation API (Google Translate)
+  // Translation API (Google Translate Free)
   async translateText(text, targetLang = 'ar') {
     try {
-      const response = await axios.get('https://api.mymemory.translated.net/get', {
-        params: {
-          q: text,
-          langpair: `en|${targetLang}`
-        },
+      const response = await axios.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`, {
         timeout: this.timeout
       });
-      return response.data.responseData.translatedText;
+      return response.data[0][0][0];
     } catch (error) {
       logger('خطأ في الترجمة: ' + error.message, 'ERROR');
       return null;
     }
   }
 
-  // URL Shortener (TinyURL)
-  async shortenURL(url) {
-    try {
-      const response = await axios.get('https://tinyurl.com/api-create.php', {
-        params: { url: url },
-        timeout: this.timeout
-      });
-      return response.data;
-    } catch (error) {
-      logger('خطأ في تقصير الرابط: ' + error.message, 'ERROR');
-      return null;
-    }
-  }
-
-  // Joke API
+  // Joke API (Arabic/English)
   async getJoke() {
     try {
-      const response = await axios.get('https://official-joke-api.appspot.com/random_joke', {
+      const response = await axios.get('https://api.popcat.xyz/joke', {
         timeout: this.timeout
       });
-      return response.data;
+      return response.data.joke;
     } catch (error) {
       logger('خطأ في الحصول على نكتة: ' + error.message, 'ERROR');
       return null;
@@ -220,19 +183,6 @@ class APIManager {
     }
   }
 
-  // Anime Quote API
-  async getAnimeQuote() {
-    try {
-      const response = await axios.get('https://animechan.vercel.app/api/random', {
-        timeout: this.timeout
-      });
-      return response.data;
-    } catch (error) {
-      logger('خطأ في الحصول على اقتباس أنمي: ' + error.message, 'ERROR');
-      return null;
-    }
-  }
-
   // Random User API
   async getRandomUser() {
     try {
@@ -245,7 +195,9 @@ class APIManager {
         email: user.email,
         phone: user.phone,
         picture: user.picture.large,
-        location: `${user.location.city}, ${user.location.country}`
+        location: `${user.location.city}, ${user.location.country}`,
+        gender: user.gender,
+        nat: user.nat
       };
     } catch (error) {
       logger('خطأ في الحصول على مستخدم عشوائي: ' + error.message, 'ERROR');

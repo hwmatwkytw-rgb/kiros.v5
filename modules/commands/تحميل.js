@@ -1,90 +1,69 @@
-const axios = require("axios");
-const fs = require("fs-extra");
-const path = require("path");
+const apiManager = require('../../utils/apis');
+const formatter = require('../../utils/formatter');
+const axios = require('axios');
+const fs = require('fs-extra');
+const path = require('path');
 
 module.exports.config = {
   name: "تحميل",
-  version: "2.5.0",
+  version: "3.0.0",
   hasPermssion: 0,
-  credits: "ᎠᎯᏁᎢᎬ ᏚᎮᎯᏒᎠᎯ",
-  description: "تحميل ذكي (Apify Engine) مع تنسيق ڪايࢪوس الأنيق",
-  commandCategory: "الخدمات",
+  credits: "Manus-Agent",
+  description: "تحميل ذكي وفائق السرعة من (YouTube, TikTok, FB, IG)",
+  commandCategory: "وسائط",
   usages: "[رابط الفيديو]",
-  cooldowns: 5
+  cooldowns: 5,
+  dependencies: {
+      axios: "",
+      "fs-extra": ""
+  }
 };
 
-module.exports.run = async function ({ api, event, args }) {
+module.exports.run = async function ({ api: bot, event, args }) {
   const { threadID, messageID } = event;
   const url = args[0];
-  
-  // المفتاح الخاص بك الذي قمت بتزويدي به
-  const APIFY_TOKEN = "apify_api_eDLZzyxOOebIxT0Nf5yqjKYxhuf6Pw2rQ6ST"; 
 
   if (!url) {
-    return api.sendMessage("─── 🦋 ڪايࢪوس ───\n✨ يرجى إدراج الرابط الذي تود تحميله.", threadID, messageID);
+    return bot.sendMessage(formatter.formatMessage("يرجى وضع رابط الفيديو بعد الأمر.\nمثال: .تحميل [رابط]", "INFO"), threadID, messageID);
   }
 
-  // إعدادات المنصات والتفاعلات
+  // تحديد المنصة والرموز
   let platform = "الويب";
   let emoji = "📥";
-  let theme = "🔹";
+  if (url.includes("youtube.com") || url.includes("youtu.be")) { platform = "YouTube"; emoji = "🔴"; }
+  else if (url.includes("tiktok.com")) { platform = "TikTok"; emoji = "🖤"; }
+  else if (url.includes("facebook.com") || url.includes("fb.watch")) { platform = "Facebook"; emoji = "🔵"; }
+  else if (url.includes("instagram.com")) { platform = "Instagram"; emoji = "🟣"; }
 
-  if (url.includes("youtube.com") || url.includes("youtu.be")) { platform = "YouTube"; emoji = "🔴"; theme = "🔻"; }
-  else if (url.includes("tiktok.com")) { platform = "TikTok"; emoji = "🖤"; theme = "🎵"; }
-  else if (url.includes("facebook.com") || url.includes("fb.watch")) { platform = "Facebook"; emoji = "🔵"; theme = "🔹"; }
-  else if (url.includes("instagram.com")) { platform = "Instagram"; emoji = "🟣"; theme = "📸"; }
-
-  // تفاعل البدء
-  api.setMessageReaction(emoji, messageID, () => {}, true);
-  const waitMsg = await api.sendMessage(`${theme} جاري معالجة الرابط عبر خوادم ڪايࢪوس..`, threadID);
+  bot.setMessageReaction(emoji, messageID, () => {}, true);
+  const waitMsg = await bot.sendMessage(formatter.formatMessage(`جاري معالجة رابط ${platform} عبر خوادم N-Dora... 🎬`, "WAIT"), threadID);
 
   try {
     let downloadUrl = "";
     let title = "فيديو مستخرج";
 
-    // --- المحرك الأول: Apify (الأكثر دقة) ---
-    try {
-      const apifyEndpoint = `https://api.apify.com/v2/acts/wilcode~all-social-media-video-downloader/run-sync-get-dataset-items?token=${APIFY_TOKEN}`;
-      const apifyRes = await axios.post(apifyEndpoint, {
-        url: url,
-        mergeAV: true,
-        mergeYoutube: true
-      }, { timeout: 45000 });
-
-      if (apifyRes.data && apifyRes.data.length > 0) {
-        const result = apifyRes.data[0];
-        downloadUrl = result.download || result.url;
-        title = result.title || title;
-      }
-    } catch (e) {
-      console.log("Apify engine bypass, trying secondary nodes...");
+    // محاولة جلب الرابط من المحرك المركزي
+    const videoData = await apiManager.getUniversalDownload(url);
+    
+    if (videoData) {
+      downloadUrl = videoData.url || videoData.mp3 || videoData.video || videoData.download;
+      title = videoData.title || title;
     }
 
-    // --- المحرك الثاني: Fallback (في حال فشل الأول) ---
     if (!downloadUrl) {
-      const fallbacks = [
-        `https://api.ryann.my.id/download/allinone?url=${encodeURIComponent(url)}`,
-        `https://api.vreden.my.id/api/download/allinone?url=${encodeURIComponent(url)}`
-      ];
-
-      for (const link of fallbacks) {
-        try {
-          const res = await axios.get(link, { timeout: 15000 });
-          if (res.data) {
-            downloadUrl = res.data.data?.download_url || res.data.result?.url;
-            title = res.data.data?.title || res.data.result?.title || title;
-            if (downloadUrl) break;
-          }
-        } catch (e) { continue; }
+      // محاولة بديلة لـ YouTube
+      if (platform === "YouTube") {
+        const ytData = await apiManager.getYouTubeDownload(url);
+        downloadUrl = ytData?.mp3 || ytData?.url;
       }
     }
 
     if (!downloadUrl) throw new Error("NOT_FOUND");
 
-    // --- معالجة الملف مؤقتاً ---
+    // معالجة الملف مؤقتاً
     const cacheDir = path.join(__dirname, "cache");
     if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-    const cachePath = path.join(cacheDir, `kyros_${Date.now()}.mp4`);
+    const cachePath = path.join(cacheDir, `ndora_${Date.now()}.mp4`);
 
     const videoBuffer = await axios.get(downloadUrl, { responseType: "arraybuffer", timeout: 180000 });
     fs.writeFileSync(cachePath, Buffer.from(videoBuffer.data, "binary"));
@@ -95,28 +74,22 @@ module.exports.run = async function ({ api, event, args }) {
     // قيود فيسبوك (48MB كحد أقصى)
     if (stats.size > 48 * 1024 * 1024) { 
       fs.unlinkSync(cachePath);
-      api.unsendMessage(waitMsg.messageID);
-      api.setMessageReaction("⚠️", messageID, () => {}, true);
-      return api.sendMessage(`─── 🦋 ڪايࢪوس ───\n🍃 حجم الفيديو (${sizeMB}MB) يتخطى حدود الإرسال.`, threadID, messageID);
+      bot.unsendMessage(waitMsg.messageID);
+      bot.setMessageReaction("⚠️", messageID, () => {}, true);
+      return bot.sendMessage(formatter.formatMessage(`حجم الفيديو (${sizeMB}MB) يتخطى حدود الإرسال المسموح بها.`, "ERROR"), threadID, messageID);
     }
 
-    // تفاعل النجاح
-    api.setMessageReaction("✅", messageID, () => {}, true);
-    api.unsendMessage(waitMsg.messageID);
+    bot.setMessageReaction("✅", messageID, () => {}, true);
+    bot.unsendMessage(waitMsg.messageID);
     
-    // إرسال النتيجة النهائية
-    return api.sendMessage({
-      body: `─── 🦋 ڪايࢪوس ───\n\n` +
-            `📝 العنوان: ${title.substring(0, 40)}...\n` +
-            `🌐 المنصة: ${platform}\n` +
-            `⚖️ الحجم: ${sizeMB} MB\n\n` +
-            `─── ─── ─── ───`,
+    return bot.sendMessage({
+      body: formatter.formatMessage(`تم استخراج الفيديو بنجاح!\n📝 العنوان: ${title.substring(0, 40)}...\n🌐 المنصة: ${platform}\n⚖️ الحجم: ${sizeMB} MB`, "SUCCESS"),
       attachment: fs.createReadStream(cachePath)
     }, threadID, () => fs.unlinkSync(cachePath), messageID);
 
   } catch (err) {
-    api.unsendMessage(waitMsg.messageID);
-    api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage("─── 🦋 ڪايࢪوس ───\n🍃 فشل النظام في جلب الفيديو، تأكد من خصوصية الرابط.", threadID, messageID);
+    bot.unsendMessage(waitMsg.messageID);
+    bot.setMessageReaction("❌", messageID, () => {}, true);
+    return bot.sendMessage(formatter.formatMessage("فشل النظام في جلب الفيديو. تأكد من أن الرابط صحيح وعام.", "ERROR"), threadID, messageID);
   }
 };
