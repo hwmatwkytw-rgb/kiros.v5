@@ -35,7 +35,7 @@ module.exports.run = async function ({ api, event, Users }) {
 ╰─── · · · · · ───╯
 
 ┌ 📊 الاحصائيات
-│ • ⏱️ التشفيل : ${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}
+│ • ⏱️ التشـغيل : ${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}
 │ • 👥 المجموعات : ${groupCount}
 └───────────────┈
 
