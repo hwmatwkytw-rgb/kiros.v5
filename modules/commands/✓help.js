@@ -3,7 +3,7 @@ module.exports.config = {
   version: "1.4.0",
   hasPermssion: 0,
   credits: "DANTE SPARDA",
-  description: "قائمة أوامر مقسمة على صفحتين فقط بالتنسيق الهندسي الحاد",
+  description: "قائمة أوامر بنظام الحواف الهندسية الرفيعة",
   commandCategory: "نظام",
   usages: "[رقم الصفحة]",
   cooldowns: 5,
@@ -15,7 +15,7 @@ module.exports.config = {
 
 module.exports.languages = {
   "en": {
-    "moduleInfo": "┝───「 %1 」\n\n نبذة: %2\n الاستخدام: %3\n الفئة: %4\n الانتظار: %5 ثانية\n الصلاحية: %6\n\n┝───「 %7 」",
+    "moduleInfo": "┝───「 %1 」\n│ › الوصف ─ %2\n│ › الاستخدام ─ %3\n│ › الفئة ─ %4\n│ › الانتظار ─ %5 ثانية\n│ › الصلاحية ─ %6\n┝───「 %7 」",
     "user": "مستخدم",
     "adminGroup": "مشرف مجموعة",
     "adminBot": "مطور البوت"
@@ -28,7 +28,12 @@ module.exports.run = async function({ api, event, args, getText }) {
   const { threadID, messageID } = event;
 
   const imgUrl = "https://i.ibb.co/Vcsqzf4T/22ed4e077eadba33e9b9f78a64317ab9.jpg";
-  const image = (await axios.get(imgUrl, { responseType: "stream" })).data;
+  let image;
+  try {
+    image = (await axios.get(imgUrl, { responseType: "stream" })).data;
+  } catch (e) {
+    image = null;
+  }
 
   const command = commands.get((args[0] || "").toLowerCase());
   const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
@@ -40,7 +45,6 @@ module.exports.run = async function({ api, event, args, getText }) {
 
     for (const [name, value] of commands) {
       const cat = value.config.commandCategory || "عام";
-      // استثناء أوامر المطور لخصوصية النظام
       if (cat.toLowerCase().includes("مطور") || cat.toLowerCase().includes("dev")) continue;
 
       if (!categories[cat]) categories[cat] = [];
@@ -48,36 +52,41 @@ module.exports.run = async function({ api, event, args, getText }) {
       totalCmds++;
     }
 
-    // منطق التقسيم لصفحتين فقط
-    const allCats = Object.keys(categories).sort();
-    const half = Math.ceil(allCats.length / 2); 
-    
-    const page = parseInt(args[0]) || 1;
-    if (page < 1 || page > 2) 
-      return api.sendMessage("⚠️ القائمة مقسمة إلى صفحتين فقط (1 أو 2).", threadID, messageID);
-
-    const start = (page - 1) * half;
-    const end = start + half;
-    const displayedCats = allCats.slice(start, end);
-
     let blocks = [];
-    for (let cat of displayedCats) {
+    for (let cat in categories) {
       const cmds = categories[cat].sort();
+      // تطبيق الاستايل الهندسي الرفيع هنا
       let block = `┝───「 ${cat.toUpperCase()} 」\n`;
-      block += `│ › ${cmds.join(" ─ ")}\n`;
+      
+      // تقسيم الأوامر إلى أسطر، كل سطر يحتوي على 3 أوامر لضمان التناسق
+      for (let i = 0; i < cmds.length; i += 3) {
+        const row = cmds.slice(i, i + 3).join(" ─ ");
+        block += `│ › ${row}\n`;
+      }
+      
       block += `┝─────────────────◈`;
       blocks.push(block);
     }
 
-    const msg = `
-${blocks.join("\n\n")}
+    const page = parseInt(args[0]) || 1;
+    const itemsPerPage = 5; 
+    const totalPages = Math.ceil(blocks.length / itemsPerPage);
 
-┝─────────────────╼
-│ المجموع: ${totalCmds} أمر
-│ الصفحة: [ ${page} / 2 ]
-│ المطور: DANTE SPARDA
-┝─────────────────╼
-💡 استخدم ${prefix}اوامر [الاسم] للتفاصيل.`;
+    if (page < 1 || page > totalPages) 
+      return api.sendMessage(`⚠️ القائمة تحتوي على ${totalPages} صفحات فقط.`, threadID, messageID);
+
+    const start = (page - 1) * itemsPerPage;
+    const displayedBlocks = blocks.slice(start, start + itemsPerPage).join("\n\n");
+
+    const msg = `
+${displayedBlocks}
+
+──────────────────
+📌 المجموع: ${totalCmds} أمر | الصفحة: ${page}/${totalPages}
+💡 استخدم ${prefix}${module.exports.config.name} [اسم الأمر] للتفاصيل.
+
+⇨ المطور: DANTE SPARDA
+──────────────────`;
 
     return api.sendMessage({ body: msg, attachment: image }, threadID);
   }
@@ -85,7 +94,7 @@ ${blocks.join("\n\n")}
   return api.sendMessage(
     getText(
       "moduleInfo",
-      command.config.name,
+      command.config.name.toUpperCase(),
       command.config.description,
       `${prefix}${command.config.name} ${(command.config.usages) ? command.config.usages : ""}`,
       command.config.commandCategory,
