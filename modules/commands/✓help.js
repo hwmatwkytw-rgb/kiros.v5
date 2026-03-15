@@ -1,9 +1,9 @@
 module.exports.config = {
   name: "اوامر",
-  version: "1.4.0",
+  version: "1.4.1",
   hasPermssion: 0,
   credits: "DANTE SPARDA",
-  description: "قائمة أوامر بنظام الحواف الهندسية الرفيعة",
+  description: "قائمة أوامر بنظام الحواف المنحنية الرفيعة",
   commandCategory: "نظام",
   usages: "[رقم الصفحة]",
   cooldowns: 5,
@@ -15,7 +15,7 @@ module.exports.config = {
 
 module.exports.languages = {
   "en": {
-    "moduleInfo": "┝───「 %1 」\n│ › الوصف ─ %2\n│ › الاستخدام ─ %3\n│ › الفئة ─ %4\n│ › الانتظار ─ %5 ثانية\n│ › الصلاحية ─ %6\n┝───「 %7 」",
+    "moduleInfo": "╮────────── ⎔ ──────────╭\n│ › الاسم ─ %1\n│ › الوصف ─ %2\n│ › الاستخدام ─ %3\n│ › الفئة ─ %4\n│ › الانتظار ─ %5 ثانية\n│ › الصلاحية ─ %6\n╯────────── ⊞ ──────────╰\n│ صـنـع بـواسطـة: %7",
     "user": "مستخدم",
     "adminGroup": "مشرف مجموعة",
     "adminBot": "مطور البوت"
@@ -27,7 +27,8 @@ module.exports.run = async function({ api, event, args, getText }) {
   const { commands } = global.client;
   const { threadID, messageID } = event;
 
-  const imgUrl = "https://i.ibb.co/Vcsqzf4T/22ed4e077eadba33e9b9f78a64317ab9.jpg";
+  // الرابط الجديد الذي زودتني به
+  const imgUrl = "https://i.ibb.co/HpgjQn4Y/1773583274989.png";
   let image;
   try {
     image = (await axios.get(imgUrl, { responseType: "stream" })).data;
@@ -55,38 +56,40 @@ module.exports.run = async function({ api, event, args, getText }) {
     let blocks = [];
     for (let cat in categories) {
       const cmds = categories[cat].sort();
-      // تطبيق الاستايل الهندسي الرفيع هنا
-      let block = `┝───「 ${cat.toUpperCase()} 」\n`;
+      let block = `╮─── ⎔ 「 ${cat.toUpperCase()} 」\n`;
       
-      // تقسيم الأوامر إلى أسطر، كل سطر يحتوي على 3 أوامر لضمان التناسق
       for (let i = 0; i < cmds.length; i += 3) {
-        const row = cmds.slice(i, i + 3).join(" ─ ");
+        const row = cmds.slice(i, i + 3).join("  ─  ");
         block += `│ › ${row}\n`;
       }
       
-      block += `┝─────────────────◈`;
+      block += `╯────────── ⊞ ──────────╰`;
       blocks.push(block);
     }
 
     const page = parseInt(args[0]) || 1;
-    const itemsPerPage = 5; 
-    const totalPages = Math.ceil(blocks.length / itemsPerPage);
+    const itemsPerPage = Math.ceil(blocks.length / 2); 
+    const totalPages = 2;
 
     if (page < 1 || page > totalPages) 
-      return api.sendMessage(`⚠️ القائمة تحتوي على ${totalPages} صفحات فقط.`, threadID, messageID);
+      return api.sendMessage(`يا حبيبنا القائمة دي فيها صفحتين بس (1 أو 2).`, threadID, messageID);
 
     const start = (page - 1) * itemsPerPage;
     const displayedBlocks = blocks.slice(start, start + itemsPerPage).join("\n\n");
 
     const msg = `
+╮────────── ⎔ ──────────╭
+           Command
+╯────────── ⎔ ──────────╰
+
 ${displayedBlocks}
 
-──────────────────
-📌 المجموع: ${totalCmds} أمر | الصفحة: ${page}/${totalPages}
-💡 استخدم ${prefix}${module.exports.config.name} [اسم الأمر] للتفاصيل.
-
-⇨ المطور: DANTE SPARDA
-──────────────────`;
+╮────────── ⊞ ──────────╭
+│ الأوامــر : ${totalCmds} | الصفحة: ${page}/${totalPages}
+│ الـبـوت : ڪايࢪوس
+│ الـمـطـور : DANTE SPARDA
+│ اسـتـخــدم : ${prefix}${module.exports.config.name} [اسم الأمر]
+╯────────── ⊞ ──────────╰`;
 
     return api.sendMessage({ body: msg, attachment: image }, threadID);
   }
