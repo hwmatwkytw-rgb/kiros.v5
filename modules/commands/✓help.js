@@ -1,9 +1,9 @@
 module.exports.config = {
   name: "اوامر",
-  version: "1.3.5",
+  version: "1.4.0",
   hasPermssion: 0,
   credits: "DANTE SPARDA",
-  description: "قائمة أوامر بنظام الحواف الشجرية والخطوط الطويلة",
+  description: "قائمة أوامر مقسمة على صفحتين فقط بالتنسيق الهندسي الحاد",
   commandCategory: "نظام",
   usages: "[رقم الصفحة]",
   cooldowns: 5,
@@ -15,7 +15,7 @@ module.exports.config = {
 
 module.exports.languages = {
   "en": {
-    "moduleInfo": "─── ◈ %1 ◈ ───\n\n نبذة: %2\n الاستخدام: %3\n الفئة: %4\n الانتظار: %5 ثانية\n الصلاحية: %6\n\n─── ◈ %7 ◈ ───",
+    "moduleInfo": "┝───「 %1 」\n\n نبذة: %2\n الاستخدام: %3\n الفئة: %4\n الانتظار: %5 ثانية\n الصلاحية: %6\n\n┝───「 %7 」",
     "user": "مستخدم",
     "adminGroup": "مشرف مجموعة",
     "adminBot": "مطور البوت"
@@ -40,7 +40,7 @@ module.exports.run = async function({ api, event, args, getText }) {
 
     for (const [name, value] of commands) {
       const cat = value.config.commandCategory || "عام";
-      // فلترة أوامر المطور لضمان الخصوصية
+      // استثناء أوامر المطور لخصوصية النظام
       if (cat.toLowerCase().includes("مطور") || cat.toLowerCase().includes("dev")) continue;
 
       if (!categories[cat]) categories[cat] = [];
@@ -48,40 +48,36 @@ module.exports.run = async function({ api, event, args, getText }) {
       totalCmds++;
     }
 
+    // منطق التقسيم لصفحتين فقط
+    const allCats = Object.keys(categories).sort();
+    const half = Math.ceil(allCats.length / 2); 
+    
+    const page = parseInt(args[0]) || 1;
+    if (page < 1 || page > 2) 
+      return api.sendMessage("⚠️ القائمة مقسمة إلى صفحتين فقط (1 أو 2).", threadID, messageID);
+
+    const start = (page - 1) * half;
+    const end = start + half;
+    const displayedCats = allCats.slice(start, end);
+
     let blocks = [];
-    for (let cat in categories) {
+    for (let cat of displayedCats) {
       const cmds = categories[cat].sort();
-      // استايل الحواف والخطوط الطويلة
-      let block = `📂 ${cat.toUpperCase()}\n`;
-      block += `│\n`;
-      
-      // تنسيق الأوامر بفاصل ◈ مع حافة النهاية
-      block += `└─ ◈ ${cmds.join(" ◈ ")}`;
+      let block = `┝───「 ${cat.toUpperCase()} 」\n`;
+      block += `│ › ${cmds.join(" ─ ")}\n`;
+      block += `┝─────────────────◈`;
       blocks.push(block);
     }
 
-    const page = parseInt(args[0]) || 1;
-    const itemsPerPage = 5; 
-    const totalPages = Math.ceil(blocks.length / itemsPerPage);
-
-    if (page < 1 || page > totalPages) 
-      return api.sendMessage(`⚠️ القائمة تحتوي على ${totalPages} صفحات فقط.`, threadID, messageID);
-
-    const start = (page - 1) * itemsPerPage;
-    const displayedBlocks = blocks.slice(start, start + itemsPerPage).join("\n\n");
-
     const msg = `
-${displayedBlocks}
+${blocks.join("\n\n")}
 
-──────────────────
-📌 المجموع: ${totalCmds} أمر
-💡 استخدم ${prefix}help [اسم الأمر] لعرض التفاصيل.
-
-⇨ المطور: DANTE SPARDA
-
-🌸 استغفر الله العظيم وأتوب إليه
-🤍 اللهم صل وسلم على نبينا محمد ﷺ
-──────────────────`;
+┝─────────────────╼
+│ المجموع: ${totalCmds} أمر
+│ الصفحة: [ ${page} / 2 ]
+│ المطور: DANTE SPARDA
+┝─────────────────╼
+💡 استخدم ${prefix}اوامر [الاسم] للتفاصيل.`;
 
     return api.sendMessage({ body: msg, attachment: image }, threadID);
   }
