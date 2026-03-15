@@ -1,9 +1,9 @@
 module.exports.config = {
   name: "اوامر",
-  version: "1.4.6",
+  version: "1.5.0",
   hasPermssion: 0,
   credits: "DANTE SPARDA",
-  description: "قائمة أوامر ذكية بفلترة أوامر المطور",
+  description: "قائمة أوامر ذكية تدمج كل الفئات المتقاربة منطقياً",
   commandCategory: "نظام",
   usages: "[رقم الصفحة]",
   cooldowns: 5,
@@ -44,16 +44,27 @@ module.exports.run = async function({ api, event, args, getText }) {
     for (const [name, value] of commands) {
       let cat = (value.config.commandCategory || "عامة").toLowerCase();
 
-      // فلترة صارمة لأوامر المطورين (لن تظهر أبداً)
-      if (cat.includes("مطور") || cat.includes("dev") || cat.includes("owner") || cat.includes("نظام المطور")) continue;
+      // 1. فلترة أوامر المطور (إخفاء كامل)
+      if (cat.includes("مطور") || cat.includes("dev") || cat.includes("owner") || cat.includes("نظام المطور") || cat.includes("تحديث")) continue;
       
       let finalCat = value.config.commandCategory;
-      // دمج الفئات الذكي
-      if (cat.includes("لعب") || cat.includes("ترفيه") || cat.includes("تسلية")) finalCat = "التسلية والالعاب";
-      else if (cat.includes("ادمن") || cat.includes("حماية") || cat.includes("نظام") || cat.includes("ادارة")) finalCat = "الادارة والحماية";
-      else if (cat.includes("زكاء") || cat.includes("ai") || cat.includes("ذكاء")) finalCat = "تقنيات AI";
-      else if (cat.includes("وسائط") || cat.includes("تحميل") || cat.includes("فيديو")) finalCat = "الوسائط والتحميل";
-      else if (cat.includes("عام") || cat.includes("ادوات") || cat.includes("أدوات")) finalCat = "العامة والأدوات";
+
+      // 2. منطق الدمج الشامل (Grouping Logic)
+      if (cat.includes("لعب") || cat.includes("ترفيه") || cat.includes("تسلية") || cat.includes("ضحك") || cat.includes("بوس") || cat.includes("عناق")) {
+        finalCat = "التسلية والالعاب";
+      } 
+      else if (cat.includes("ادمن") || cat.includes("حماية") || cat.includes("نظام") || cat.includes("ادارة") || cat.includes("مجموعة") || cat.includes("تصفية")) {
+        finalCat = "الادارة والحماية";
+      } 
+      else if (cat.includes("زكاء") || cat.includes("ai") || cat.includes("ذكاء") || cat.includes("توليد") || cat.includes("رسم")) {
+        finalCat = "تقنيات الذكاء";
+      } 
+      else if (cat.includes("وسائط") || cat.includes("تحميل") || cat.includes("فيديو") || cat.includes("اغاني") || cat.includes("صور") || cat.includes("تيك")) {
+        finalCat = "الوسائط والتحميل";
+      } 
+      else {
+        finalCat = "الخدمات العامة"; // أي فئة أخرى تندمج هنا تلقائياً
+      }
 
       if (!categories[finalCat]) categories[finalCat] = [];
       categories[finalCat].push(name);
@@ -99,10 +110,10 @@ ${displayedBlocks}
     return api.sendMessage({ body: msg, attachment: image }, threadID);
   }
 
-  // إذا بحث عن أمر مطور بالاسم، لن يعرض تفاصيله أيضاً زيادة في الأمان
+  // منع عرض تفاصيل أوامر المطور حتى لو تم البحث عنها بالاسم
   const checkCat = command.config.commandCategory.toLowerCase();
   if (checkCat.includes("مطور") || checkCat.includes("dev") || checkCat.includes("owner")) {
-      return api.sendMessage("الأمر ده خاص بالمطورين فقط وما متاح للعرض.", threadID, messageID);
+      return api.sendMessage("الأمر ده من أسرار المطورين، ما بنقدر نوريك ليهو! ₍ •`-ʼ• ₎", threadID, messageID);
   }
 
   return api.sendMessage(
