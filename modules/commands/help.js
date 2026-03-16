@@ -1,11 +1,11 @@
 module.exports.config = {
   name: "اوامر",
-  version: "1.2.5",
+  version: "1.3.5",
   hasPermssion: 0,
   credits: "DANTE SPARDA",
-  description: "قائمة الأوامر بنظام الفئات المدمجة - النسخة الكاملة",
+  description: "قائمة الأوامر المدمجة - العدد الحقيقي - صفحة واحدة",
   commandCategory: "نظام",
-  usages: "[رقم الصفحة]",
+  usages: "[اسم الأمر]",
   cooldowns: 5,
   envConfig: {
     autoUnsend: false,
@@ -27,7 +27,7 @@ module.exports.run = async function({ api, event, args, getText }) {
   const { commands } = global.client;
   const { threadID, messageID } = event;
 
-  const imgUrl = "https://i.ibb.co/Vcsqzf4T/22ed4e077eadba33e9b9f78a64317ab9.jpg";
+  const imgUrl = "https://i.postimg.cc/T2bF4SNQ/1773583274989.png";
   let image;
   try {
     const response = await axios.get(imgUrl, { responseType: "stream" });
@@ -40,32 +40,26 @@ module.exports.run = async function({ api, event, args, getText }) {
 
   if (!command) {
     const categories = {};
-    
-    // الأوامر المحصورة للمطور فقط
-    const devCommands = ["shell", "cmd", "setdata", "out", "getid", "admin"];
+    const totalCommands = commands.size; // جلب العدد الحقيقي للأوامر المحملة في البوت
 
-    // خريطة دمج بقية الفئات لضمان التنسيق
     const mergeMap = {
-      "ترفية": "الترفيه والوسائط", "ترفيه": "الترفيه والوسائط", "خدمات": "الترفيه والوسائط", "وسائط": "الترفيه والوسائط",
-      "العاب": "الألعاب والتسلية", "لعبة": "الألعاب والتسلية",
-      "ذكاء صناعي": "الذكاء الاصطناعي", "ذكاء": "الذكاء الاصطناعي", "ai": "الذكاء الاصطناعي",
-      "حماية": "الحماية والمجموعة", "مجموعة": "الحماية والمجموعة", "ادارة": "الحماية والمجموعة",
-      "نظام": "النظام العامة", "عام": "النظام العامة"
+      "حماية": "الحماية والادارة", "مجموعة": "الحماية والادارة", "ادارة": "الحماية والادارة", "إدارة": "الحماية والادارة", "حمايه": "الحماية والادارة",
+      "ترفية": "الخدمات والوسائط", "ترفيه": "الخدمات والوسائط", "خدمات": "الخدمات والوسائط", "وسائط": "الخدمات والوسائط", "أدوات": "الخدمات والوسائط", "ادوات": "الخدمات والوسائط",
+      "العاب": "الالعاب والتسلية والاقتصاد", "لعبة": "الالعاب والتسلية والاقتصاد", "تسلية": "الالعاب والتسلية والاقتصاد", "اقتصاد": "الالعاب والتسلية والاقتصاد", "فلوس": "الالعاب والتسلية والاقتصاد",
+      "ذكاء صناعي": "الذكاء الاصطناعي", "ذكاء": "الذكاء الاصطناعي", "ai": "الذكاء الاصطناعي", "الذكاء": "الذكاء الاصطناعي",
+      "نظام": "النظام العامة", "عام": "النظام العامة", "البوت": "النظام العامة"
     };
 
     for (let [name, value] of commands) {
       let cat;
       const catOrig = (value.config.commandCategory || "عام").trim();
 
-      // 1. فحص فئة المطور أولاً
-      if (devCommands.includes(name.toLowerCase()) || catOrig.toLowerCase() === "مطور" || catOrig.toLowerCase() === "المطور") {
+      if (catOrig.toLowerCase() === "مطور" || catOrig.toLowerCase() === "المطور" || catOrig.toLowerCase() === "dev") {
         cat = "قـائـمـة الـمـطـور";
       } 
-      // 2. دمج الفئات العامة بناءً على الخريطة
       else if (mergeMap[catOrig]) {
         cat = mergeMap[catOrig];
       }
-      // 3. إذا لم تكن في الخريطة، استخدم الاسم الأصلي (بدل كلمة أخرى)
       else {
         cat = catOrig;
       }
@@ -75,32 +69,26 @@ module.exports.run = async function({ api, event, args, getText }) {
     }
 
     let blocks = [];
-    let count = 0;
-    // ترتيب الفئات (قائمة المطور تظهر دائماً في البداية أو النهاية حسب الترتيب)
-    const sortedCats = Object.keys(categories).sort();
+    const keys = Object.keys(categories).sort((a, b) => {
+      if (a === "قـائـمـة الـمـطـور") return -1;
+      if (b === "قـائـمـة الـمـطـور") return 1;
+      return a.localeCompare(b);
+    });
 
-    for (let cat of sortedCats) {
+    for (let cat of keys) {
       const cmds = categories[cat].sort();
       let block = `╮─── ▽ 「 ${cat} 」\n`;
 
       for (let i = 0; i < cmds.length; i += 3) {
         const row = cmds.slice(i, i + 3).join("  ○  ");
         block += `│  ▱  ${row}\n`;
-        count += cmds.slice(i, i + 3).length;
       }
 
       block += `╯────────────── 🝓`;
       blocks.push(block.trim());
     }
 
-    // تقسيم عادل: 4 فئات كحد أقصى في كل صفحة
-    const perPage = 4;
-    const totalPages = Math.ceil(blocks.length / perPage);
-    let page = parseInt(args[0]) || 1;
-    if (page < 1 || page > totalPages) page = 1;
-
-    const start = (page - 1) * perPage;
-    const finalBlocks = blocks.slice(start, start + perPage).join("\n\n");
+    const finalBlocks = blocks.join("\n\n");
 
     const msg = `╮─────── 🝓 ───────╭
     𝖪 𝖠 𝖨 𝖱 𝖴 𝖲   𝖫 𝖨 𝖲 𝖳
@@ -109,7 +97,7 @@ module.exports.run = async function({ api, event, args, getText }) {
 ${finalBlocks}
 
 ╮─────── 🝓 ───────╭
-│ ⌑ الأوامر : ${count} | الصفحة : ${page}/${totalPages}
+│ ⌑ الأوامر : ${totalCommands} 
 │ ⌑ المطور : DANTE
 │ ⌑ استخدم : ${prefix}اوامر [اسم الأمر]
 ╯─────── 🝓 ───────╰`;
@@ -117,7 +105,6 @@ ${finalBlocks}
     return api.sendMessage({ body: msg, attachment: image }, threadID);
   }
 
-  // الجزء الخاص بعرض تفاصيل أمر واحد
   return api.sendMessage(
     getText(
       "moduleInfo",
