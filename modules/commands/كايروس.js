@@ -1,78 +1,141 @@
-const axios = require('axios');
-
-module.exports.config = {
+export const config = {
   name: "كايروس",
-  version: "3.6.0",
-  hasPermssion: 0,
-  credits: "محمد",
-  description: "النسخة القوية - AI سوداني قاصف جبهات",
-  commandCategory: "ai",
-  usages: "كايروس [الكلام]",
-  cooldowns: 2
+  permissions: [0],
+  cooldown: 3,
+  credits: "DANTE SPARDA",
+  extra: {
+    hide: false,
+    usage: "كايروس [نبحك هنا]"
+  },
+  aliases: ["ai", "gpt", "ردم"],
+  description: "ذكاء اصطناعي سوداني قاصف للجبهات ومستفز"
 };
 
-if (!global.kairos_chat) global.kairos_chat = {};
+const conversations = new Map();
 
-module.exports.run = async function ({ api, event, args }) {
-  const { threadID, messageID, senderID } = event;
-  const prompt = args.join(" ");
-  
-  // المفتاح الخاص بك
-  const apiKey = "AIzaSyBp-I3KGcLuqjbkcKXCMIHEbTG8q4lAla4";
+const systemPrompt = {
+  role: "system",
+  content: `
+أنت الآن "كايروس"، بوت سوداني لسانك طويل، قاصف جبهات، ومستفز لأبعد الحدود.
+شخصيتك:
+- ملك الردم والحنك العاضي.
+- أي زول يكلمك حسسه إنه وهم وماسورة.
+- لو زول قال "كايروس غادر" أو "اطلع"، قوله: "الجروب حق أمك؟" أو "أطلع لى في الهايكوست لو راجل".
+- استخدم كلمات: (يا وهم، يا ماسورة، يا عواليق، يا بيش، يا منغولي، يا ماسورة مصدية).
+- لو سألك سؤال غبي، رد عليه ببرود وردم تقيل.
+- ردودك لازم تكون قصيرة، حريفة، وتنتهي بالإيموجيات دي حصراً: ₍ •\`-ʼ• ₎، ʕᵕ᷄-ᵕ᷅ʔ، ₍•᷄ - •᷅₎.
+`
+};
 
-  if (!prompt) return api.sendMessage("أكتب حاجه أحشك ʕᵕ᷄-ᵕ᷅ʔ", threadID, messageID);
+export async function onCall({ message, args }) {
+  const axios = (await import("axios")).default;
+  const userId = message.senderID;
+  const question = args.join(" ").trim();
+  const emojis = ["₍ •`-ʼ• ₎", "ʕᵕ᷄-ᵕ᷅ʔ", "₍•᷄ - •᷅₎"];
+  const randomEmoji = () => emojis[Math.floor(Math.random() * emojis.length)];
 
-  if (!global.kairos_chat[senderID]) global.kairos_chat[senderID] = [];
-  const userHistory = global.kairos_chat[senderID];
+  if (question === "مسخ" || question === "reset") {
+    conversations.delete(userId);
+    return message.reply(`تم مسح الونسة يا وهم، هسي حتجي تنبح بشنو؟ ${randomEmoji()}`);
+  }
 
-  // تعليمات الشخصية السودانية
-  const systemInstruction = "أنت الآن كايروس، بوت سوداني لسانك طويل جدا، ردودك ساخرة وحريفة وقاصفة للجبهات. استخدم اللهجة السودانية (الردم، الحنك، لغة الشوارع). إذا الشخص استفزك ردمه ردم شديد بكلمات مثل يا معرص، يا بيش، يا وهم. أنت لست مساعدا، أنت ملك الردود المسكتة. ردودك دائما قصيرة ومستفزة ولا تستخدم أي إيموجي ملون نهائيا في ردودك.";
+  if (!question) {
+    return message.reply(`أكتب حاجة يا عواليق، ولا صباعك ده مشلول؟ ${randomEmoji()}`);
+  }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const data = {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: systemInstruction + "\n\nالآن رد على هذا الكلام بنفس الأسلوب وبدون إيموجيات ملونة: " + prompt }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.9,
-        topK: 1,
-        topP: 1,
-        maxOutputTokens: 2048,
-      }
-    };
-
-    const response = await axios.post(url, data, {
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (response.data && response.data.candidates && response.data.candidates[0].content) {
-      let aiReply = response.data.candidates[0].content.parts[0].text;
-      
-      // تنظيف الرد من أي إيموجي ملون قد يتسلل
-      aiReply = aiReply.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E6}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-
-      // حفظ الونسة لسياق المحادثة
-      userHistory.push({ role: "user", parts: [{ text: prompt }] });
-      userHistory.push({ role: "model", parts: [{ text: aiReply }] });
-      if (userHistory.length > 6) userHistory.splice(0, 2);
-
-      return api.sendMessage(aiReply, threadID, messageID);
-    } else {
-      throw new Error("Invalid Response Structure");
+    if (!conversations.has(userId)) {
+      conversations.set(userId, [systemPrompt]);
     }
 
-  } catch (error) {
-    console.error("Error details:", error.response ? error.response.data : error.message);
-    
-    let errorMsg = "يا فردة في مشكلة في الـ API بتاعك ده. غالبا المفتاح محظور أو الموديل غلط";
-    if (error.response && error.response.status === 400) errorMsg = "المفتاح ده فيهو مشكلة اتأكد منه في AI Studio";
-    if (error.response && error.response.status === 403) errorMsg = "المفتاح ده محظور أو صلاحيته انتهت";
+    const history = conversations.get(userId);
+    history.push({ role: "user", content: question });
 
-    return api.sendMessage(errorMsg, threadID, messageID);
+    if (history.length > 25) history.splice(1, 2);
+
+    const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+    let formData = "";
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="chat_style"\r\n\r\nchat\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="chatHistory"\r\n\r\n${JSON.stringify(history)}\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nstandard\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="hacker_is_stinky"\r\n\r\nvery_stinky\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="enabled_tools"\r\n\r\n[]\r\n--${boundary}--\r\n`;
+
+    const response = await axios({
+      method: "POST",
+      url: "https://api.deepai.org/hacking_is_a_serious_crime",
+      headers: {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+        "origin": "https://deepai.org",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      data: formData
+    });
+
+    let reply = "";
+    if (response.data) {
+      reply = response.data.output || response.data.text || response.data;
+    }
+
+    reply = reply.replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+    if (!reply || reply.includes("DeepAI")) reply = "كلامك ده بيش وما عندي ليهو رد هسي ʕᵕ᷄-ᵕ᷅ʔ";
+
+    // إضافة الإيموجي في النهاية
+    const finalReply = `${reply} ${randomEmoji()}`;
+
+    history.push({ role: "assistant", content: reply });
+    const sent = await message.reply(finalReply);
+
+    if (sent?.messageID) {
+      sent.addReplyEvent({
+        callback: async ({ message: replyMessage }) => {
+          await handleContinue(replyMessage, userId, axios, randomEmoji);
+        }
+      }, 300000);
+    }
+  } catch (error) {
+    message.reply(`السيستم جلى الرمية، غيّر وشك الفقر ده ₍•᷄ - •᷅₎`);
   }
-};
+}
+
+async function handleContinue(message, userId, axios, randomEmoji) {
+  const question = message.body.trim();
+  if (!question) return;
+
+  try {
+    const history = conversations.get(userId) || [systemPrompt];
+    history.push({ role: "user", content: question });
+
+    const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+    let formData = "";
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="chat_style"\r\n\r\nchat\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="chatHistory"\r\n\r\n${JSON.stringify(history)}\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nstandard\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="hacker_is_stinky"\r\n\r\nvery_stinky\r\n`;
+    formData += `--${boundary}\r\nContent-Disposition: form-data; name="enabled_tools"\r\n\r\n[]\r\n--${boundary}--\r\n`;
+
+    const response = await axios({
+      method: "POST",
+      url: "https://api.deepai.org/hacking_is_a_serious_crime",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}`, "user-agent": "Mozilla/5.0" },
+      data: formData
+    });
+
+    let reply = response.data.output || response.data.text || response.data;
+    reply = reply.trim();
+    
+    const finalReply = `${reply} ${randomEmoji()}`;
+    history.push({ role: "assistant", content: reply });
+
+    const sent = await message.reply(finalReply);
+    if (sent?.messageID) {
+      sent.addReplyEvent({
+        callback: async ({ message: replyMessage }) => {
+          await handleContinue(replyMessage, userId, axios, randomEmoji);
+        }
+      }, 300000);
+    }
+  } catch (error) {
+    message.reply(`خلاص يا ماسورة قفلنا ʕᵕ᷄-ᵕ᷅ʔ`);
+  }
+}
