@@ -1,9 +1,9 @@
 module.exports.config = {
   name: "اوامر",
-  version: "1.0.7",
+  version: "1.2.5",
   hasPermssion: 0,
   credits: "DANTE SPARDA",
-  description: "قائمة الأوامر بنظام الفئات المدمجة - نسخة دانتي",
+  description: "قائمة الأوامر بنظام الفئات المدمجة - النسخة الكاملة",
   commandCategory: "نظام",
   usages: "[رقم الصفحة]",
   cooldowns: 5,
@@ -40,31 +40,46 @@ module.exports.run = async function({ api, event, args, getText }) {
 
   if (!command) {
     const categories = {};
+    
+    // الأوامر المحصورة للمطور فقط
+    const devCommands = ["shell", "cmd", "setdata", "out", "getid", "admin"];
+
+    // خريطة دمج بقية الفئات لضمان التنسيق
     const mergeMap = {
-      "ترفية": "الترفيه والوسائط",
-      "خدمات": "الترفيه والوسائط",
-      "وسائط": "الترفيه والوسائط",
-      "العاب": "الألعاب والتسلية",
-      "ذكاء صناعي": "الذكاء الاصطناعي",
-      "حماية": "الحماية والمجموعة",
-      "مجموعة": "الحماية والمجموعة",
-      "نظام": "النظام العامة",
-      "عام": "النظام العامة"
+      "ترفية": "الترفيه والوسائط", "ترفيه": "الترفيه والوسائط", "خدمات": "الترفيه والوسائط", "وسائط": "الترفيه والوسائط",
+      "العاب": "الألعاب والتسلية", "لعبة": "الألعاب والتسلية",
+      "ذكاء صناعي": "الذكاء الاصطناعي", "ذكاء": "الذكاء الاصطناعي", "ai": "الذكاء الاصطناعي",
+      "حماية": "الحماية والمجموعة", "مجموعة": "الحماية والمجموعة", "ادارة": "الحماية والمجموعة",
+      "نظام": "النظام العامة", "عام": "النظام العامة"
     };
 
     for (let [name, value] of commands) {
-      const catOrig = value.config.commandCategory || "عام";
-      if (catOrig.toLowerCase() === "مطور" || catOrig.toLowerCase() === "المطور") continue;
+      let cat;
+      const catOrig = (value.config.commandCategory || "عام").trim();
 
-      const cat = mergeMap[catOrig] || "أخرى";
+      // 1. فحص فئة المطور أولاً
+      if (devCommands.includes(name.toLowerCase()) || catOrig.toLowerCase() === "مطور" || catOrig.toLowerCase() === "المطور") {
+        cat = "قـائـمـة الـمـطـور";
+      } 
+      // 2. دمج الفئات العامة بناءً على الخريطة
+      else if (mergeMap[catOrig]) {
+        cat = mergeMap[catOrig];
+      }
+      // 3. إذا لم تكن في الخريطة، استخدم الاسم الأصلي (بدل كلمة أخرى)
+      else {
+        cat = catOrig;
+      }
+      
       if (!categories[cat]) categories[cat] = [];
       categories[cat].push(name);
     }
 
     let blocks = [];
     let count = 0;
+    // ترتيب الفئات (قائمة المطور تظهر دائماً في البداية أو النهاية حسب الترتيب)
+    const sortedCats = Object.keys(categories).sort();
 
-    for (let cat in categories) {
+    for (let cat of sortedCats) {
       const cmds = categories[cat].sort();
       let block = `╮─── ▽ 「 ${cat} 」\n`;
 
@@ -78,12 +93,11 @@ module.exports.run = async function({ api, event, args, getText }) {
       blocks.push(block.trim());
     }
 
-    const totalPages = 2;
-    const perPage = Math.ceil(blocks.length / totalPages);
-    const page = parseInt(args[0]) || 1;
-
-    if (page < 1 || page > totalPages)
-      return api.sendMessage(`⚠️ القائمة تتكون من ${totalPages} صفحات فقط.`, threadID, messageID);
+    // تقسيم عادل: 4 فئات كحد أقصى في كل صفحة
+    const perPage = 4;
+    const totalPages = Math.ceil(blocks.length / perPage);
+    let page = parseInt(args[0]) || 1;
+    if (page < 1 || page > totalPages) page = 1;
 
     const start = (page - 1) * perPage;
     const finalBlocks = blocks.slice(start, start + perPage).join("\n\n");
@@ -100,12 +114,10 @@ ${finalBlocks}
 │ ⌑ استخدم : ${prefix}اوامر [اسم الأمر]
 ╯─────── 🝓 ───────╰`;
 
-    return api.sendMessage(
-      { body: msg, attachment: image },
-      threadID
-    );
+    return api.sendMessage({ body: msg, attachment: image }, threadID);
   }
 
+  // الجزء الخاص بعرض تفاصيل أمر واحد
   return api.sendMessage(
     getText(
       "moduleInfo",
@@ -114,11 +126,7 @@ ${finalBlocks}
       `${prefix}${command.config.name} ${(command.config.usages) ? command.config.usages : ""}`,
       command.config.commandCategory,
       command.config.cooldowns,
-      (command.config.hasPermssion == 0)
-        ? getText("user")
-        : (command.config.hasPermssion == 1)
-        ? getText("adminGroup")
-        : getText("adminBot"),
+      (command.config.hasPermssion == 0) ? "مستخدم" : (command.config.hasPermssion == 1) ? "مشرف" : "مطور",
       command.config.credits
     ),
     threadID,
