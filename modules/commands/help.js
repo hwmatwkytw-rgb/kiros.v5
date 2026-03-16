@@ -1,9 +1,9 @@
 module.exports.config = {
   name: "اوامر",
-  version: "1.5.5",
+  version: "1.0.6",
   hasPermssion: 0,
-  credits: "DANTE SPARDA",
-  description: "قائمة أوامر ذكية مقسمة على صفحتين فقط",
+  credits: "ڪولو سان + تصميم منسق بواسطة محمد إدريس",
+  description: "قائمة الأوامر بشكل منسق وجميل",
   commandCategory: "نظام",
   usages: "[رقم الصفحة]",
   cooldowns: 5,
@@ -15,94 +15,108 @@ module.exports.config = {
 
 module.exports.languages = {
   "en": {
-    "moduleInfo": "╮────────── ⎔ ──────────╭\n│ › الاسم ─ %1\n│ › الوصف ─ %2\n│ › الاستخدام ─ %3\n│ › الفئة ─ %4\n│ › الانتظار ─ %5 ثانية\n│ › الصلاحية ─ %6\n╯────────── ⊞ ──────────╰\n│ صـنـع بـواسطـة: %7",
-    "user": "مستخدم",
-    "adminGroup": "مشرف مجموعة",
-    "adminBot": "مطور البوت"
+    "moduleInfo": "「 %1 」\n%2\n\n❯ Usage: %3\n❯ Category: %4\n❯ Waiting time: %5 seconds(s)\n❯ Permission: %6\n\n» Module code by %7 «",
+    "helpList": '[ There are %1 commands on this bot, Use: "%2help nameCommand" to know how to use! ]',
+    "user": "User",
+    "adminGroup": "Admin group",
+    "adminBot": "Admin bot"
   }
 };
 
 module.exports.run = async function({ api, event, args, getText }) {
+  const fs = require("fs");
   const axios = require("axios");
   const { commands } = global.client;
   const { threadID, messageID } = event;
 
-  const imgUrl = "https://i.ibb.co/HpgjQn4Y/1773583274989.png";
-  let image;
-  try {
-    const response = await axios.get(imgUrl, { responseType: "stream" });
-    image = response.data;
-  } catch (e) { image = null; }
+  const image = (await axios.get(
+    "https://i.ibb.co/Vcsqzf4T/22ed4e077eadba33e9b9f78a64317ab9.jpg",
+    { responseType: "stream" }
+  )).data;
 
-  const commandName = (args[0] || "").toLowerCase();
+  const command = commands.get((args[0] || "").toLowerCase());
   const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
   const prefix = threadSetting.PREFIX || global.config.PREFIX;
 
-  if (!commands.has(commandName)) {
+  if (!command) {
+
     const categories = {};
-    let totalCmds = 0;
-
-    for (const [name, value] of commands) {
-      let cat = (value.config.commandCategory || "عامة").toLowerCase();
-      if (cat.includes("مطور") || cat.includes("dev") || cat.includes("owner") || cat.includes("نظام المطور")) continue;
-      
-      let finalCat = value.config.commandCategory;
-      if (cat.includes("لعب") || cat.includes("ترفيه") || cat.includes("تسلية") || cat.includes("ضحك") || cat.includes("بوس")) finalCat = "التسلية والالعاب";
-      else if (cat.includes("ادمن") || cat.includes("حماية") || cat.includes("نظام") || cat.includes("ادارة")) finalCat = "الادارة والحماية";
-      else if (cat.includes("زكاء") || cat.includes("ai") || cat.includes("ذكاء") || cat.includes("رسم")) finalCat = "تقنيات الذكاء";
-      else if (cat.includes("وسائط") || cat.includes("تحميل") || cat.includes("فيديو") || cat.includes("اغاني")) finalCat = "الوسائط والتحميل";
-      else finalCat = "الخدمات العامة";
-
-      if (!categories[finalCat]) categories[finalCat] = [];
-      categories[finalCat].push(name);
-      totalCmds++;
+    for (let [name, value] of commands) {
+      const cat = value.config.commandCategory || "عام";
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(name);
     }
+
+    const categoryMap = {
+      "نظام": "⚙️ أوامر النظام",
+      "ترفية": "🎴 الترفيه",
+      "اقتصاد": "💰 الاقتصاد",
+      "العاب": "🎮 الألعاب",
+      "ذكاء صناعي": "🤖 الذكاء الصناعي",
+      "مطور": "🛠️ أوامر المطور",
+      "عام": "📌 أوامر عامة"
+    };
 
     let blocks = [];
-    const sortedCats = Object.keys(categories).sort();
-    for (let cat of sortedCats) {
+    let count = 0;
+
+    for (let cat in categories) {
       const cmds = categories[cat].sort();
-      let block = `╮─── ⎔ 「 ${cat.toUpperCase()} 」\n`;
-      for (let i = 0; i < cmds.length; i += 3) {
-        const row = cmds.slice(i, i + 3).join("  ─  ");
-        block += `│ › ${row}\n`;
+      let block = `✦ ───『 ${categoryMap[cat] || cat} 』─── ⚝\n`;
+
+      for (let i = 0; i < cmds.length; i += 5) {
+        const row = cmds.slice(i, i + 5).join(" │ ");
+        block += `◈ ${row}\n`;
+        count += cmds.slice(i, i + 5).length;
       }
-      block += `╯────────── ⊞ ──────────╰`;
-      blocks.push(block);
+
+      blocks.push(block.trim());
     }
 
-    // القفل على صفحتين فقط
-    const totalPages = 2;
+    const totalPages = 3;
+    const perPage = Math.ceil(blocks.length / totalPages);
     const page = parseInt(args[0]) || 1;
-    
-    // حساب عدد البلوكات في كل صفحة (نصف المجموع)
-    const itemsPerPage = Math.ceil(blocks.length / 2);
 
-    if (page < 1 || page > totalPages) 
-      return api.sendMessage(`قائمة الأوامر دي فيها صفحتين بس يا ملك ₍•᷄ - •᷅₎`, threadID, messageID);
+    if (page < 1 || page > totalPages)
+      return api.sendMessage(`⚠️ اختر صفحة بين 1 - ${totalPages}`, threadID, messageID);
 
-    const start = (page - 1) * itemsPerPage;
-    const end = start + itemsPerPage;
-    const displayedBlocks = blocks.slice(start, end).join("\n\n");
+    const start = (page - 1) * perPage;
+    const finalBlocks = blocks.slice(start, start + perPage).join("\n\n");
 
-    const msg = `╮────────── ⎔ ──────────╭\n          KIRUS COMMANDS\n╯────────── ⎔ ──────────╰\n\n${displayedBlocks}\n\n╮────────── ⊞ ──────────╭\n│ الأوامــر : ${totalCmds} | الصفحة: ${page}/${totalPages}\n│ الـبـوت : ڪايࢪوس\n│ الـمـطـور : DANTE SPARDA\n│ اسـتـخــدم : ${prefix}${this.config.name} [اسم الأمر]\n╯────────── ⊞ ──────────╰`;
+    const msg = `
+✦ ───『 كايـࢪوس ⚡ قائمة الأوامر 』─── ⚝
 
-    return api.sendMessage({ body: msg, attachment: image }, threadID);
+${finalBlocks}
+
+──────────────
+📌 المجموع: ${count} أمر
+💡 استخدم ${prefix}help [اسم الأمر] لعرض التفاصيل.
+
+⇨ البوت: كايـࢪوس
+⇨ المطور: ڪولو
+
+${page === 1 ? "🌸 استغفر الله العظيم وأتوب إليه\n🤍 اللهم صل وسلم على نبينا محمد ﷺ" : ""}
+`;
+
+    return api.sendMessage(
+      { body: msg, attachment: image },
+      threadID
+    );
   }
-
-  // تفاصيل الأمر الفردي
-  const command = commands.get(commandName);
-  if (command.config.commandCategory.toLowerCase().includes("مطور")) return api.sendMessage("ممنوع الاقتراب من أوامر المطور! ʕᵕ᷄-ᵕ᷅ʔ", threadID, messageID);
 
   return api.sendMessage(
     getText(
       "moduleInfo",
-      command.config.name.toUpperCase(),
+      command.config.name,
       command.config.description,
       `${prefix}${command.config.name} ${(command.config.usages) ? command.config.usages : ""}`,
       command.config.commandCategory,
       command.config.cooldowns,
-      (command.config.hasPermssion == 0) ? getText("user") : (command.config.hasPermssion == 1) ? getText("adminGroup") : getText("adminBot"),
+      (command.config.hasPermssion == 0)
+        ? getText("user")
+        : (command.config.hasPermssion == 1)
+        ? getText("adminGroup")
+        : getText("adminBot"),
       command.config.credits
     ),
     threadID,
