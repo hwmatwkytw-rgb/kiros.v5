@@ -38,6 +38,7 @@ app.get("/", (req, res) => {
     <h1>SAIKO BOT ONLINE</h1>
     <p>STATUS: RUNNING</p>
     <p>TIME: ${moment.tz("Asia/Ho_Chi_Minh").format("HH:mm:ss")}</p>
+    <p>🤖 بوت سيكو شغال ✅</p>
   `);
 });
 
