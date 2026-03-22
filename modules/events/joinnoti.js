@@ -4,9 +4,9 @@ const moment = require("moment-timezone");
 module.exports.config = {
   name: "joinNoti",
   eventType: ["log:subscribe", "log:unsubscribe"],
-  version: "1.0.8",
-  credits: "النسخة الأصلية",
-  description: "إشعار انضمام ومغادرة",
+  version: "1.1.2",
+  credits: "DANTE SPARDA",
+  description: "إشعار انضمام ومغادرة باستايل هندسي رقمي",
   dependencies: {
     "fs-extra": "",
     "moment-timezone": ""
@@ -18,31 +18,31 @@ module.exports.run = async function({ api, event, Users }) {
   const developerID = "61581906898524"; 
 
   if (logMessageType === "log:subscribe") {
+    // إشعار انضمام البوت للمجموعة
     if (logMessageData.addedParticipants.some(i => i.userFbId == api.getCurrentUserID())) {
       if (author !== developerID) return;
       
       const botName = global.config.BOTNAME || "KYROS BOT";
       const totalCommands = global.client.commands.size;
+      const prefix = global.config.PREFIX;
       
-      api.changeNickname(`[ ${global.config.PREFIX} ] • ${botName}`, threadID, api.getCurrentUserID());
+      api.changeNickname(`[ ${prefix} ] • ${botName}`, threadID, api.getCurrentUserID());
       
-      const botMsg = `╭──〔  تم الاتصال 🔵 بنجاح 〕──
-│
-│ ↫اسم البوت   ⤹  ${botName} ❘ BOT ⇊
-│
-│ ↫الاصدار     : 〘3.7.0〙
-│
-│ ↫عدد الاوامر:  〘${totalCommands}〙
-│
-│ ↫البادئة : 〘${global.config.PREFIX}〙
-│
-│ ↫⇨ المطور: ڪولو سـان 
-│
-│ ↫🤍 اللهم صل وسلم على نبينا محمد ﷺ
-╰──────────────`;
+      const botMsg = `╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭
+     CONNECTION ESTABLISHED
+╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰
+  ⋄ الاسـم : ${botName}
+  ⋄ الإصـدار : 3.7.0
+  ⋄ الأوامـر : ${totalCommands}
+  ⋄ الـبادئـة : [ ${prefix} ]
+╮───────────────────╭
+  " اللهم صلِ وسلم على نبينا محمد "
+╯───────────────────╰`;
+      
       return api.sendMessage(botMsg, threadID);
     }
 
+    // إشعار انضمام الأعضاء الجدد
     try {
       const threadInfo = await api.getThreadInfo(threadID);
       const nameArray = logMessageData.addedParticipants.map(i => i.fullName);
@@ -52,18 +52,22 @@ module.exports.run = async function({ api, event, Users }) {
       
       const time = moment.tz("Africa/Khartoum").format("hh:mm A • DD/MM/YYYY");
       
-      const msg = `◆━━━━━▣ ✿ ▣━━━━━━◆
-❏ أهلاً بـك يا  | ${nameArray.join(", ")}
-❏ في مجموعة | ${threadInfo.threadName}
-❏ بواسطة     | ${adderName}
-❏ الاعــضــــاء | ${threadInfo.participantIDs.length}
-❏ الـوقــــت   | ${time}
-❏ كُن عابراً لطيفاً.. إن لم تنفع فلا تضر 🍂🤍
-◆━━━━━▣ ✿ ▣━━━━━━◆`;
+      const msg = `╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭
+      WELCOME TO OUR WORLD
+╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰
+  ◈ الـعـضـو : ${nameArray.join(", ")}
+  ◈ الـقـروب : ${threadInfo.threadName}
+  ◈ الـمُـضـيف : ${adderName}
+  ◈ الـعـدد   : ${threadInfo.participantIDs.length}
+  ◈ الـتـوقـيت : ${time}
+╮───────────────────╭
+  " كُن عابراً لطيفاً.. تترك أثراً جميلاً "
+╯───────────────────╰`;
       return api.sendMessage({ body: msg, mentions }, threadID);
     } catch (e) {}
   }
 
+  // نظام الحماية وإشعار المغادرة
   if (logMessageType === "log:unsubscribe") {
     const leftID = logMessageData.leftParticipantFbId;
     if (leftID == api.getCurrentUserID()) return;
@@ -72,11 +76,12 @@ module.exports.run = async function({ api, event, Users }) {
         return api.sendMessage("العب بلع بانكاي في جلحاتو 🐸", threadID);
     }
 
+    // محاولة إعادة الإضافة التلقائية
     api.addUserToGroup(leftID, threadID, (err) => {
       if (err) {
         return api.sendMessage("احشك واحش البضيفك زاتو 🦧📿", threadID);
       } else {
-        return api.sendMessage("شارد وين ينجص 🐸؟", threadID);
+        return api.sendMessage("لديك كرامة جميلة 🐸✨", threadID);
       }
     });
   }
