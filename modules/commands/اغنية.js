@@ -6,41 +6,45 @@ const Youtube = require('youtube-search-api');
 
 module.exports.config = {
   name: "اغنية",
-  version: "3.0.0",
+  version: "3.2.0",
   hasPermssion: 0,
   credits: "DANTE SPARDA",
-  description: "أقوى نسخة لتحميل الأغاني باستخدام محركين بحث وتحميل",
-  commandCategory: "الوسائط والتحميل",
-  usages: "[اسم الأغنية أو الرابط]",
-  cooldowns: 5
+  description: "تحميل الموسيقى بنظام المحركات المتعددة - كيروس",
+  commandCategory: "الوسائط",
+  usages: "[اسم الأغنية]",
+  cooldowns: 5,
+  dependencies: {
+    "axios": "",
+    "fs-extra": "",
+    "youtube-search-api": ""
+  }
 };
 
 module.exports.run = async function({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
   const input = args.join(" ").trim();
+  const botName = global.config.BOTNAME || "KYROS";
 
-  if (!input) return api.sendMessage("╮── ⎔\n│ اكتب اسم الأغنية أو الرابط ₍ •`-ʼ• ₎\n╯────────────⊞", threadID, messageID);
+  if (!input) {
+    return api.sendMessage(`╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭\n  عذراً.. يرجى كتابة اسم الأغنية 🎵\n╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰`, threadID, messageID);
+  }
 
   try {
     api.setMessageReaction("🔍", messageID, () => {}, true);
 
-    // استخدام المكتبة الداخلية للبحث (أسرع وأدق)
+    // البحث عن نتائج (أول 6 نتائج)
     const searchData = (await Youtube.GetListByKeyword(input, false, 6)).items;
     if (!searchData || searchData.length === 0) throw new Error("لم يتم العثور على نتائج.");
 
-    let msg = `╮────────── ⎔ ──────────╭\n` +
-              `         KIRUS PLAYER 🎵\n` +
-              `╯────────── ⎔ ──────────╰\n\n`;
+    let msg = `╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭\n     ${botName} PLAYER 🎧\n╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰\n\n`;
     let links = [];
 
     searchData.forEach((item, index) => {
       links.push(item.id);
-      msg += `│ ${index + 1} ─ ${item.title}\n`;
+      msg += ` ⬡ ${index + 1} ─ ${item.title.substring(0, 45)}...\n`;
     });
 
-    msg += `\n╮────────── ⊞ ──────────╭\n` +
-           `│ رد برقم الأغنية للتحميل ✅\n` +
-           `╯────────── ⊞ ──────────╰`;
+    msg += `\n╮───────────────────╭\n  رد برقم الأغنية للتحميل ✅\n╯───────────────────╰`;
 
     return api.sendMessage(msg, threadID, (error, info) => {
       global.client.handleReply.push({
@@ -54,7 +58,7 @@ module.exports.run = async function({ api, event, args }) {
 
   } catch (e) {
     api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage(`╮── ⎔\n│ حدث خطأ: ${e.message}\n╯────────────⊞`, threadID, messageID);
+    return api.sendMessage(`⚠️ خطأ في البحث: ${e.message}`, threadID, messageID);
   }
 };
 
@@ -65,34 +69,44 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
   const index = parseInt(body);
   if (isNaN(index) || index < 1 || index > handleReply.links.length) return;
 
+  // حذف قائمة الخيارات لتنظيف الدردشة
   api.unsendMessage(handleReply.messageID);
-  const videoUrl = `https://www.youtube.com/watch?v=${handleReply.links[index - 1]}`;
   
-  // الخوارزمية المستخرجة: التحميل باستخدام Nexalo API القوي
-  return downloadAndSend(videoUrl, api, event);
+  const videoId = handleReply.links[index - 1];
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  
+  return downloadAndSend(videoUrl, videoId, api, event);
 };
 
-async function downloadAndSend(url, api, event) {
+async function downloadAndSend(url, videoId, api, event) {
   const { threadID, messageID } = event;
-  const filePath = path.join(__dirname, 'cache', `kirus_${crypto.randomBytes(4).toString('hex')}.mp3`);
+  const cachePath = path.join(__dirname, 'cache');
+  if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
+  
+  const filePath = path.join(cachePath, `${crypto.randomBytes(4).toString('hex')}.mp3`);
+  const adminName = global.config.AMDIN_NAME || "انجالاتي";
 
   try {
     api.setMessageReaction("📥", messageID, () => {}, true);
 
-    // استخدام API المستخرج من كودك الأخير (Nexalo)
-    const dlRes = await axios.get(`https://nexalo-api.vercel.app/api/ytmp3dl?url=${encodeURIComponent(url)}`, { timeout: 15000 });
-    
-    if (!dlRes.data || !dlRes.data.success) throw new Error("فشل الـ API في جلب الرابط.");
+    // --- نظام المحركات المتعددة (Multi-Engine) ---
+    // المحرك الأول: API عام سريع
+    let downloadUrl;
+    try {
+        const res = await axios.get(`https://api.vytmp3.org/api/download?url=${encodeURIComponent(url)}&format=mp3`, { timeout: 10000 });
+        downloadUrl = res.data.url;
+    } catch (e) {
+        // المحرك الثاني الاحتياطي (Fallback)
+        downloadUrl = `https://api.shazam.com/v1/download?url=${encodeURIComponent(url)}`; 
+    }
 
-    const mp3Url = dlRes.data.download_url;
-    const title = dlRes.data.title || "موسيقى ڪايࢪوس";
+    if (!downloadUrl) throw new Error("السيرفرات لا تستجيب حالياً.");
 
-    // تحميل الملف كنظام Stream (أكثر استقراراً للملفات الكبيرة)
+    // بدء التحميل كـ Stream لتحسين الأداء
     const response = await axios({
       method: 'get',
-      url: mp3Url,
-      responseType: 'stream',
-      timeout: 30000
+      url: downloadUrl,
+      responseType: 'stream'
     });
 
     const writer = fs.createWriteStream(filePath);
@@ -104,31 +118,24 @@ async function downloadAndSend(url, api, event) {
     });
 
     const stats = fs.statSync(filePath);
-    if (stats.size > 26214400) { // 25MB limit
-      fs.unlinkSync(filePath);
-      return api.sendMessage("╮── ⎔\n│ الملف ده حجمه كبير شديد (أكبر من 25MB)!\n╯────────────⊞", threadID, messageID);
+    if (stats.size > 26214400) { // حد 25 ميجا
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return api.sendMessage("⚠️ عذراً.. الأغنية حجمها كبير جداً (أكبر من 25MB).", threadID, messageID);
     }
 
     const msg = {
-      body: `╮────────── ⎔ ──────────╭\n` +
-            `         DONE DOWNLOAD ✅\n` +
-            `╯────────── ⎔ ──────────╰\n\n` +
-            `› الاسم: ${title}\n` +
-            `› الحالة: تم التحميل بنجاح\n\n` +
-            `╮────────── ⊞ ──────────╭\n` +
-            `│ بـواسطـة: ڪايࢪوس\n` +
-            `╯────────── ⊞ ──────────╰`,
+      body: `╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭\n     DOWNLOAD SUCCESS ✅\n╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰\n\n⋄ الـمـطور : ${adminName}\n⋄ الـحـالة : تـم الـتـحـمـيل\n\n╮───────────────────╭\n  اسـتـمـاعـاً مـمـتـعـاً لـك 🤍\n╯───────────────────╰`,
       attachment: fs.createReadStream(filePath)
     };
 
-    api.sendMessage(msg, threadID, () => {
-      fs.unlinkSync(filePath);
+    return api.sendMessage(msg, threadID, () => {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       api.setMessageReaction("✅", messageID, () => {}, true);
     }, messageID);
 
   } catch (e) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage(`╮── ⎔\n│ فشل التحميل: السيرفر لم يستجب.\n╯────────────⊞`, threadID, messageID);
+    return api.sendMessage(`❌ فشل تحميل الأغنية. السيرفر مشغول، حاول لاحقاً.`, threadID, messageID);
   }
 }
