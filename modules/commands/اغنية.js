@@ -3,21 +3,17 @@ const fs = require('fs-extra');
 const path = require('path');
 const crypto = require('crypto');
 const Youtube = require('youtube-search-api');
+const ytdl = require("@distube/ytdl-core");
 
 module.exports.config = {
   name: "اغنية",
-  version: "3.2.0",
+  version: "5.0.0",
   hasPermssion: 0,
-  credits: "DANTE SPARDA",
-  description: "تحميل الموسيقى بنظام المحركات المتعددة - كيروس",
+  credits: "DANTE SPARDA + Upgrade",
+  description: "تحميل الموسيقى بنظام احترافي بدون API",
   commandCategory: "الوسائط",
   usages: "[اسم الأغنية]",
-  cooldowns: 5,
-  dependencies: {
-    "axios": "",
-    "fs-extra": "",
-    "youtube-search-api": ""
-  }
+  cooldowns: 5
 };
 
 module.exports.run = async function({ api, event, args }) {
@@ -32,7 +28,6 @@ module.exports.run = async function({ api, event, args }) {
   try {
     api.setMessageReaction("🔍", messageID, () => {}, true);
 
-    // البحث عن نتائج (أول 6 نتائج)
     const searchData = (await Youtube.GetListByKeyword(input, false, 6)).items;
     if (!searchData || searchData.length === 0) throw new Error("لم يتم العثور على نتائج.");
 
@@ -69,12 +64,11 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
   const index = parseInt(body);
   if (isNaN(index) || index < 1 || index > handleReply.links.length) return;
 
-  // حذف قائمة الخيارات لتنظيف الدردشة
   api.unsendMessage(handleReply.messageID);
-  
+
   const videoId = handleReply.links[index - 1];
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  
+
   return downloadAndSend(videoUrl, videoId, api, event);
 };
 
@@ -82,35 +76,21 @@ async function downloadAndSend(url, videoId, api, event) {
   const { threadID, messageID } = event;
   const cachePath = path.join(__dirname, 'cache');
   if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
-  
+
   const filePath = path.join(cachePath, `${crypto.randomBytes(4).toString('hex')}.mp3`);
   const adminName = global.config.AMDIN_NAME || "انجالاتي";
 
   try {
     api.setMessageReaction("📥", messageID, () => {}, true);
 
-    // --- نظام المحركات المتعددة (Multi-Engine) ---
-    // المحرك الأول: API عام سريع
-    let downloadUrl;
-    try {
-        const res = await axios.get(`https://api.vytmp3.org/api/download?url=${encodeURIComponent(url)}&format=mp3`, { timeout: 10000 });
-        downloadUrl = res.data.url;
-    } catch (e) {
-        // المحرك الثاني الاحتياطي (Fallback)
-        downloadUrl = `https://api.shazam.com/v1/download?url=${encodeURIComponent(url)}`; 
-    }
-
-    if (!downloadUrl) throw new Error("السيرفرات لا تستجيب حالياً.");
-
-    // بدء التحميل كـ Stream لتحسين الأداء
-    const response = await axios({
-      method: 'get',
-      url: downloadUrl,
-      responseType: 'stream'
+    // 🔥 التحميل باستخدام ytdl-core (بدون API)
+    const stream = ytdl(url, {
+      filter: "audioonly",
+      quality: "highestaudio"
     });
 
     const writer = fs.createWriteStream(filePath);
-    response.data.pipe(writer);
+    stream.pipe(writer);
 
     await new Promise((resolve, reject) => {
       writer.on('finish', resolve);
@@ -118,9 +98,9 @@ async function downloadAndSend(url, videoId, api, event) {
     });
 
     const stats = fs.statSync(filePath);
-    if (stats.size > 26214400) { // حد 25 ميجا
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return api.sendMessage("⚠️ عذراً.. الأغنية حجمها كبير جداً (أكبر من 25MB).", threadID, messageID);
+    if (stats.size > 26214400) {
+      fs.unlinkSync(filePath);
+      return api.sendMessage("⚠️ عذراً.. الأغنية أكبر من 25MB.", threadID, messageID);
     }
 
     const msg = {
@@ -129,13 +109,13 @@ async function downloadAndSend(url, videoId, api, event) {
     };
 
     return api.sendMessage(msg, threadID, () => {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      fs.unlinkSync(filePath);
       api.setMessageReaction("✅", messageID, () => {}, true);
     }, messageID);
 
   } catch (e) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage(`❌ فشل تحميل الأغنية. السيرفر مشغول، حاول لاحقاً.`, threadID, messageID);
+    return api.sendMessage("❌ فشل تحميل الأغنية. حاول لاحقاً.", threadID, messageID);
   }
 }
