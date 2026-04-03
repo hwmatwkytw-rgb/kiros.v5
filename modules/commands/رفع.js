@@ -1,50 +1,50 @@
+const axios = require("axios");
+
 module.exports.config = {
-    name: "رفع",
-    version: "1.0.0",
-    hasPermssion: 0,
-    credits: "Gemini AI",
-    description: "رفع صورة وتحويلها إلى رابط مباشر",
-    commandCategory: "أدوات",
-    cooldowns: 5
+  name: "رفع",
+  version: "1.5.0",
+  hasPermssion: 0,
+  credits: "DANTE",
+  description: "رفع الصور وتحويلها إلى رابط مباشر (استايل كايروس)",
+  commandCategory: "أدوات",
+  cooldowns: 5
 };
 
 module.exports.run = async ({ api, event }) => {
-    const { threadID, messageID, messageReply } = event;
+  const { threadID, messageID, messageReply } = event;
 
-    // التأكد أن المستخدم رد على صورة
-    if (!messageReply || !messageReply.attachments || messageReply.attachments.length == 0) {
-        return api.sendMessage("📌 رد على صورة عشان أرفعها وأحولها لرابط مباشر", threadID, messageID);
-    }
+  // التحقق من وجود صورة في الرد
+  if (!messageReply || !messageReply.attachments || messageReply.attachments.length == 0) {
+    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ يرجى الرد على صورة لرفعها ○\n╯────────────── 🝓", threadID, messageID);
+  }
 
-    try {
-        const attachment = messageReply.attachments[0];
+  const attachment = messageReply.attachments[0];
+  if (attachment.type !== "photo") {
+    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ يرجى الرد على صورة فقط ○\n╯────────────── 🝓", threadID, messageID);
+  }
 
-        // التأكد أنها صورة
-        if (attachment.type !== "photo") {
-            return api.sendMessage("❌ لازم ترد على صورة فقط", threadID, messageID);
-        }
+  try {
+    api.setMessageReaction("☁️", messageID, () => {}, true);
 
-        const imageUrl = attachment.url;
+    const loadingMsg = `╮─────── 🝓 ───────╭\n    𝖴 𝖯 𝖫 𝖮 𝖠 𝖣   𝖢 𝖤 𝖭 𝖳 𝖤 𝖱\n╯─────── 🝓 ───────╰\n│ ⌑ الحالة : جاري الرفع...\n│ ⌑ المصدر : Cloud Storage\n╯────────────── 🝓`;
+    const info = await api.sendMessage(loadingMsg, threadID);
 
-        // رفع الصورة إلى Catbox (رابط مباشر)
-        const axios = require("axios");
-        const res = await axios.get("https://catbox.moe/user/api.php", {
-            params: {
-                reqtype: "urlupload",
-                url: imageUrl
-            }
-        });
+    // استخدام API رفع مستقر (ImgBB أو Catbox عبر بروكسي محكم)
+    const res = await axios.get(`https://api.vreden.my.id/api/upload?url=${encodeURIComponent(attachment.url)}`);
+    
+    // التأكد من الحصول على الرابط المباشر
+    const directLink = res.data.result.url || res.data.result;
 
-        const directLink = res.data;
+    api.unsendMessage(info.messageID);
+    api.setMessageReaction("✅", messageID, () => {}, true);
 
-        return api.sendMessage(
-            `🖼️ تم رفع الصورة بنجاح!\n\n🔗 الرابط المباشر:\n${directLink}`,
-            threadID,
-            messageID
-        );
+    const report = `╮─────── 🝓 ───────╭\n    𝖴 𝖯 𝖫 𝖮 𝖠 𝖣   𝖣 𝖮 𝖭 𝖤\n╯─────── 🝓 ───────╰\n│ ⌑ الرابط المباشر :\n│ ${directLink}\n│\n│ ⌑ المطور : DANTE\n╯────────────── 🝓`;
 
-    } catch (error) {
-        console.log(error);
-        return api.sendMessage("❌ حدث خطأ أثناء رفع الصورة", threadID, messageID);
-    }
+    return api.sendMessage(report, threadID, messageID);
+
+  } catch (error) {
+    console.error(error);
+    api.setMessageReaction("❌", messageID, () => {}, true);
+    return api.sendMessage("╮── ▽ 「 خطأ 」\n│ فشل رفع الصورة حالياً ○\n╯────────────── 🝓", threadID, messageID);
+  }
 };
