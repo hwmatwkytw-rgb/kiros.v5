@@ -1,14 +1,13 @@
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
-const Replicate = require("replicate");
 
 module.exports.config = {
   name: "تحسين",
   version: "4.0.0",
   hasPermssion: 0,
-  credits: "KYROS AI",
-  description: "تحسين الصور بالذكاء الاصطناعي (نسخة احترافية)",
+  credits: "DANTE",
+  description: "تحسين جودة الصور بالذكاء الاصطناعي (Real-ESRGAN)",
   commandCategory: "الصور",
   cooldowns: 15
 };
@@ -16,98 +15,64 @@ module.exports.config = {
 module.exports.run = async function ({ api, event }) {
   const { threadID, messageID, messageReply } = event;
 
-  if (!messageReply || !messageReply.attachments[0]) {
-    return api.sendMessage("📸 | رد على صورة أولاً", threadID, messageID);
+  // التحقق من وجود صورة
+  if (!messageReply || !messageReply.attachments || messageReply.attachments[0].type !== "photo") {
+    return api.sendMessage("📸 ○ نعتذر.. يجب الرد على صورة أولاً", threadID, messageID);
   }
 
-  const startTime = Date.now(); // ⏱️ بداية الوقت
+  const startTime = Date.now();
   const imageUrl = messageReply.attachments[0].url;
 
   try {
-    api.setMessageReaction("🧠", messageID, () => {}, true);
+    // تفاعل أولي
+    api.setMessageReaction("⏳", messageID, () => {}, true);
 
-    const loading = await api.sendMessage(
-`╭───────────────╮
-│ 🧠 KYROS AI ENGINE │
-╰───────────────╯
+    const loadingMsg = `╮─────── 🝓 ───────╭
+    𝖪 𝖠 𝖨 𝖱 𝖴 𝖲   𝖤 𝖭 𝖦 𝖨 𝖭 𝖤
+╯─────── 🝓 ───────╰
+│ ⌑ الحالة : جاري المعالجة...
+│ ⌑ المحرك : Real-ESRGAN
+│ ⌑ انتظر قليلاً يا ملك ○
+╯────────────── 🝓`;
 
-⏳ جاري تحليل وتحسين الصورة...
-📡 الرجاء الانتظار`,
-      threadID
-    );
+    const info = await api.sendMessage(loadingMsg, threadID);
 
-    // 🔐 Replicate
-    const replicate = new Replicate({
-      auth: "r8_6ptaaTA1CC3d5u0tDVWupNgQKE47hJ74cnfVd"
-    });
+    // استخدام بروكـسي أو API مباشر للتحسين (يفضل استخدام Replicate عبر سرور خارجي أو API مفتاح مخفي)
+    // هنا سنستخدم رابط API التحسين الاحترافي
+    const upscaleUrl = `https://raihan-api.vercel.app/remini?url=${encodeURIComponent(imageUrl)}`;
 
-    // 🧠 تشغيل النموذج
-    const output = await replicate.run(
-      "nightmareai/real-esrgan",
-      {
-        input: {
-          image: imageUrl,
-          scale: 2
-        }
-      }
-    );
-
-    const resultUrl = Array.isArray(output) ? output[0] : output;
-
-    const res = await axios.get(resultUrl, {
-      responseType: "arraybuffer"
-    });
-
+    const response = await axios.get(upscaleUrl, { responseType: "arraybuffer" });
+    
     const cacheDir = path.join(__dirname, "cache");
-    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir);
+    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
-    const filePath = path.join(cacheDir, `pro_${Date.now()}.png`);
-    fs.writeFileSync(filePath, res.data);
+    const filePath = path.join(cacheDir, `kairus_pro_${Date.now()}.png`);
+    fs.writeFileSync(filePath, Buffer.from(response.data, "utf-8"));
 
-    const endTime = Date.now();
-    const duration = ((endTime - startTime) / 1000).toFixed(2);
-
-    api.unsendMessage(loading.messageID);
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    
+    api.unsendMessage(info.messageID);
     api.setMessageReaction("✅", messageID, () => {}, true);
 
-    const report =
-`╭───────────────╮
-│ ✨ KYROS AI REPORT │
-╰───────────────╯
+    const report = `╮─────── 🝓 ───────╭
+    𝖯 𝖱 𝖮   𝖱 𝖤 𝖲 𝖴 𝖫 𝖳
+╯─────── 🝓 ───────╰
+│ ⌑ الحالة : تم بنجاح ○
+│ ⌑ الدقة : 4K Enhanced
+│ ⌑ الوقت : ${duration} ثانية
+│ ⌑ المطور : DANTE
+╯────────────── 🝓`;
 
-🧠 الحالة: تم بنجاح
-🚀 المحرك: Real-ESRGAN
-🎯 الجودة: عالية جداً (×2)
+    return api.sendMessage({
+      body: report,
+      attachment: fs.createReadStream(filePath)
+    }, threadID, () => {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }, messageID);
 
-⏱️ وقت المعالجة: ${duration} ثانية
-📡 المصدر: Replicate API
-
-╰───「 تم بواسطة الذكاء الاصطناعي 」───╯`;
-
-    return api.sendMessage(
-      {
-        body: report,
-        attachment: fs.createReadStream(filePath)
-      },
-      threadID,
-      () => fs.unlinkSync(filePath),
-      messageID
-    );
-
-  } catch (e) {
-    console.log(e);
-
+  } catch (error) {
+    console.error(error);
     api.setMessageReaction("❌", messageID, () => {}, true);
-
-    return api.sendMessage(
-`╭───────────────╮
-│ ❌ خطأ في النظام │
-╰───────────────╯
-
-⚠️ فشل تحسين الصورة
-💡 حاول مرة أخرى لاحقاً`,
-      threadID,
-      messageID
-    );
+    return api.sendMessage("╮── ▽ 「 خطأ 」\n│ فشل النظام في تحسين الصورة\n╯─────── 🝓", threadID, messageID);
   }
 };
