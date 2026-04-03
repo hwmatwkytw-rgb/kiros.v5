@@ -1,12 +1,13 @@
-const fs = require("fs-extra");
 const { exec } = require("child_process");
+const fs = require("fs-extra");
+const path = require("path");
 
 module.exports.config = {
   name: "رست",
-  version: "2.0.0",
-  hasPermssion: 2, // مخصص للمطور كايࢪوس فقط
-  credits: "ڪايࢪوس",
-  description: "إعادة تشغيل النظام أو تحديث الأوامر برقة",
+  version: "2.6.0",
+  hasPermssion: 2,
+  credits: "DANTE",
+  description: "إعادة تشغيل النظام وتحديث المكتبات (نسخة المطور)",
   commandCategory: "المطور",
   cooldowns: 5
 };
@@ -15,29 +16,40 @@ module.exports.run = async function ({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
   const devID = "61581906898524";
 
-  // حماية المطور كايࢪوس
+  // حماية المطور
   if (senderID !== devID) {
-    return api.sendMessage("✨ عذراً، هذا الركن مخصص للمطور كايࢪوس فقط.", threadID, messageID);
+    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ هذا الأمر مخصص للمطور DANTE فقط ○\n╯────────────── 🝓", threadID, messageID);
   }
 
-  // التفاعل بإيموجي إعادة التشغيل كما طلبت
   api.setMessageReaction("🔄", messageID, () => {}, true);
 
-  // الحالة الأولى: تحديث الأوامر والملفات فقط (بدون إغلاق البوت)
+  // الحالة الأولى: تحديث المكتبات npm install
   if (args[0] === "تحديث") {
-    api.sendMessage("🍃 جاري تحديث ملفات النظام والأوامر بكل هدوء..", threadID, messageID);
+    const loading = await api.sendMessage("╮─── ▽ 「 تحديث 」\n│ جاري تحديث مكتبات النظام... ○\n╯────────────── 🝓", threadID);
     
-    // هنا نقوم بمسح "كاش" الأوامر وإعادة تحميلها (تعتمد على هيكلة بوتك)
-    // بشكل عام في Render، يفضل الـ Restart الكامل، لكن هذا الخيار للسرعة
-    return exec("npm run build", (err) => { 
-       if (err) return api.sendMessage("❌ فشل التحديث السريع.", threadID);
-       api.sendMessage("✅ تم تحديث الأوامر بنجاح.", threadID);
+    return exec("npm install", (err, stdout, stderr) => {
+      if (err) {
+          api.setMessageReaction("❌", messageID, () => {}, true);
+          return api.sendMessage("╮── ▽ 「 خطأ 」\n│ فشل تحديث المكتبات ○\n╯────────────── 🝓", threadID);
+      }
+      
+      api.unsendMessage(loading.messageID);
+      api.setMessageReaction("✅", messageID, () => {}, true);
+      return api.sendMessage("╮─── ▽ 「 نجاح 」\n│ تم تحديث النظام بنجاح ○\n╯────────────── 🝓", threadID);
     });
   }
 
-  // الحالة الافتراضية: إعادة التشغيل الكامل (Restart)
-  await api.sendMessage("🦋 جاري إعادة تشغيل الإمبراطورية.. سأعود إليك خلال لحظات.", threadID, messageID);
+  // الحالة الثانية: إعادة التشغيل الكامل (Restart)
+  const restartMsg = `╮─────── 🝓 ───────╭
+    𝖲 𝖸 𝖲 𝖳 𝖤 𝖬   𝖱 𝖤 𝖲 𝖤 𝖳
+╯─────── 🝓 ───────╰
+│ ⌑ الحالة : جاري إعادة التشغيل...
+│ ⌑ الموقع : Render Engine
+│ ⌑ سأعود خلال لحظات ○
+╯────────────── 🝓`;
 
-  // إيقاف العملية (التي ستقوم Render بإعادة تشغيلها تلقائياً)
+  await api.sendMessage(restartMsg, threadID);
+
+  // تنفيذ الخروج بكود (1) ليعرف ملف index.js أنه يجب إعادة التشغيل فوراً
   process.exit(1);
 };
