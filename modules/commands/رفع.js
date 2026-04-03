@@ -1,50 +1,38 @@
-const axios = require("axios");
+const axios = require('axios');
+const fs = require('fs-extra');
+const FormData = require('form-data');
 
 module.exports.config = {
-  name: "رفع",
-  version: "1.5.0",
-  hasPermssion: 0,
-  credits: "DANTE",
-  description: "رفع الصور وتحويلها إلى رابط مباشر (استايل كايروس)",
-  commandCategory: "أدوات",
-  cooldowns: 5
+    name: "رفع",
+    version: "1.0.0",
+    hasPermssion: 0,
+    credits: "Dante Sparda",
+    description: "رفع الصور لسيرفر كايروس الخاص",
+    commandCategory: "utility",
+    usages: "رد على صورة بـ رفع",
+    cooldowns: 5
 };
 
 module.exports.run = async ({ api, event }) => {
-  const { threadID, messageID, messageReply } = event;
+    const { threadID, messageID, messageReply } = event;
+    if (!messageReply || !messageReply.attachments[0]) return api.sendMessage("يرجى الرد على صورة!", threadID, messageID);
 
-  // التحقق من وجود صورة في الرد
-  if (!messageReply || !messageReply.attachments || messageReply.attachments.length == 0) {
-    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ يرجى الرد على صورة لرفعها ○\n╯────────────── 🝓", threadID, messageID);
-  }
+    const url = messageReply.attachments[0].url;
+    const path = __dirname + `/cache/upload_${Date.now()}.jpg`;
 
-  const attachment = messageReply.attachments[0];
-  if (attachment.type !== "photo") {
-    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ يرجى الرد على صورة فقط ○\n╯────────────── 🝓", threadID, messageID);
-  }
+    try {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        fs.writeFileSync(path, Buffer.from(response.data));
 
-  try {
-    api.setMessageReaction("☁️", messageID, () => {}, true);
+        const form = new FormData();
+        form.append('image', fs.createReadStream(path));
 
-    const loadingMsg = `╮─────── 🝓 ───────╭\n    𝖴 𝖯 𝖫 𝖮 𝖠 𝖣   𝖢 𝖤 𝖭 𝖳 𝖤 𝖱\n╯─────── 🝓 ───────╰\n│ ⌑ الحالة : جاري الرفع...\n│ ⌑ المصدر : Cloud Storage\n╯────────────── 🝓`;
-    const info = await api.sendMessage(loadingMsg, threadID);
+        const res = await axios.post('https://kiros-api-22.onrender.com/api/upload', form, {
+            headers: form.getHeaders()
+        });
 
-    // استخدام API رفع مستقر (ImgBB أو Catbox عبر بروكسي محكم)
-    const res = await axios.get(`https://api.vreden.my.id/api/upload?url=${encodeURIComponent(attachment.url)}`);
-    
-    // التأكد من الحصول على الرابط المباشر
-    const directLink = res.data.result.url || res.data.result;
-
-    api.unsendMessage(info.messageID);
-    api.setMessageReaction("✅", messageID, () => {}, true);
-
-    const report = `╮─────── 🝓 ───────╭\n    𝖴 𝖯 𝖫 𝖮 𝖠 𝖣   𝖣 𝖮 𝖭 𝖤\n╯─────── 🝓 ───────╰\n│ ⌑ الرابط المباشر :\n│ ${directLink}\n│\n│ ⌑ المطور : DANTE\n╯────────────── 🝓`;
-
-    return api.sendMessage(report, threadID, messageID);
-
-  } catch (error) {
-    console.error(error);
-    api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage("╮── ▽ 「 خطأ 」\n│ فشل رفع الصورة حالياً ○\n╯────────────── 🝓", threadID, messageID);
-  }
+        api.sendMessage(`✅ تم الرفع بنجاح!\n🔗 الرابط: ${res.data.url}`, threadID, () => fs.unlinkSync(path), messageID);
+    } catch (e) {
+        api.sendMessage("❌ فشل الرفع للسيرفر الشخصي.", threadID, messageID);
+    }
 };
