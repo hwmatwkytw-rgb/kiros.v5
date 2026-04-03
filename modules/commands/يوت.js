@@ -1,47 +1,70 @@
 const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
 
 module.exports.config = {
   name: "يوت",
-  version: "1.2.0",
+  version: "1.5.0",
   hasPermssion: 0,
-  credits: "DANTE SPARDA",
-  description: "تحميل فيديو من اليوتيوب برابط مباشر",
-  commandCategory: "الوسائط والتحميل",
+  credits: "DANTE",
+  description: "تحميل فيديوهات اليوتيوب بجودة عالية (استايل كايروس)",
+  commandCategory: "الوسائط",
   usages: "[رابط الفيديو]",
   cooldowns: 10
 };
 
 module.exports.run = async function({ api, event, args }) {
   const { threadID, messageID } = event;
-  const videoUrl = args[0];
+  const url = args[0];
 
-  if (!videoUrl || !videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be")) {
-    return api.sendMessage("أرمي لي رابط يوتيوب حقيقي يا ماسورة، ما تستهبل علي ʕᵕ᷄-ᵕ᷅ʔ", threadID, messageID);
+  if (!url || (!url.includes("youtube.com") && !url.includes("youtu.be"))) {
+    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ يرجى وضع رابط يوتيوب صحيح ○\n╯────────────── 🝓", threadID, messageID);
   }
 
-  api.sendMessage("جاري سحب الفيديو من اليوتيوب.. أصبر لي شوية يا وهم ⏳", threadID, messageID);
-
   try {
-    // استخدام API تحميل مباشر وسريع
-    const res = await axios.get(`https://api.samir.xyz/download/yt?url=${encodeURIComponent(videoUrl)}`);
+    api.setMessageReaction("⏳", messageID, () => {}, true);
+
+    const loadingMsg = `╮─────── 🝓 ───────╭\n    𝖸 𝖮 𝖴 𝖳 𝖴 𝖡 𝖤   𝖣 𝖮 𝖶 𝖭\n╯─────── 🝓 ───────╰\n│ ⌑ الحالة : جاري جلب الفيديو...\n│ ⌑ المصدر : YouTube Engine\n╯────────────── 🝓`;
+    const info = await api.sendMessage(loadingMsg, threadID);
+
+    // استخدام API تحميل مستقر وسريع (مشابه لنظام التيك توك)
+    const res = await axios.get(`https://api.vreden.my.id/api/ytmp4?url=${encodeURIComponent(url)}`);
+    const data = res.data.result;
+
+    if (!data || !data.download) throw new Error("رابط غير صالح");
+
+    const cacheDir = path.join(__dirname, "cache");
+    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+
+    const filePath = path.join(cacheDir, `yt_${Date.now()}.mp4`);
     
-    if (res.data && res.data.status === true) {
-      const data = res.data.result;
-      const downloadUrl = data.download_url || data.video_url;
-      const title = data.title || "فيديو يوتيوب";
-
-      const stream = (await axios.get(downloadUrl, { responseType: "stream" })).data;
-
-      return api.sendMessage({
-        body: `تم التحميل يا فردة ₍ •\`-ʼ• ₎\n🎬 العنوان: ${title}`,
-        attachment: stream
-      }, threadID, messageID);
-    } else {
-      throw new Error("API Failed");
+    // جلب الفيديو كـ Stream لتوفير الذاكرة
+    const videoStream = await axios.get(data.download, { responseType: "arraybuffer" });
+    
+    const fileSizeMB = (videoStream.data.byteLength / (1024 * 1024)).toFixed(2);
+    
+    if (fileSizeMB > 45) { // حد أقصى 45 ميجا لضمان الإرسال
+        api.unsendMessage(info.messageID);
+        return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ الفيديو كبير جداً للإرسال ○\n╯────────────── 🝓", threadID, messageID);
     }
 
-  } catch (error) {
-    console.error(error);
-    return api.sendMessage("الفيديو ده تقيل على السيرفر أو الرابط خربان، جرب واحد غيره يا عواليق ₍•᷄ - •᷅₎", threadID, messageID);
+    fs.writeFileSync(filePath, Buffer.from(videoStream.data));
+
+    api.unsendMessage(info.messageID);
+    api.setMessageReaction("✅", messageID, () => {}, true);
+
+    const report = `╮─────── 🝓 ───────╭\n    𝖸 𝖳   𝖱 𝖤 𝖲 𝖴 𝖫 𝖳\n╯─────── 🝓 ───────╰\n│ ⌑ العنوان : ${data.title.substring(0, 30)}...\n│ ⌑ الحجم : ${fileSizeMB} MB\n│ ⌑ المطور : DANTE\n╯────────────── 🝓`;
+
+    return api.sendMessage({
+      body: report,
+      attachment: fs.createReadStream(filePath)
+    }, threadID, () => {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }, messageID);
+
+  } catch (err) {
+    console.error(err);
+    api.setMessageReaction("❌", messageID, () => {}, true);
+    return api.sendMessage("╮── ▽ 「 خطأ 」\n│ فشل سحب الفيديو.. جرب رابطاً آخر ○\n╯────────────── 🝓", threadID, messageID);
   }
 };
