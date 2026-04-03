@@ -1,16 +1,14 @@
 const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
-const crypto = require('crypto');
 const Youtube = require('youtube-search-api');
-const ytdl = require("@distube/ytdl-core");
 
 module.exports.config = {
   name: "اغنية",
-  version: "5.0.0",
+  version: "5.5.0",
   hasPermssion: 0,
-  credits: "DANTE SPARDA + Upgrade",
-  description: "تحميل الموسيقى بنظام احترافي بدون API",
+  credits: "DANTE",
+  description: "تحميل الموسيقى مع عرض الحجم والمدة (استايل كايروس)",
   commandCategory: "الوسائط",
   usages: "[اسم الأغنية]",
   cooldowns: 5
@@ -19,27 +17,34 @@ module.exports.config = {
 module.exports.run = async function({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
   const input = args.join(" ").trim();
-  const botName = global.config.BOTNAME || "KYROS";
 
   if (!input) {
-    return api.sendMessage(`╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭\n  عذراً.. يرجى كتابة اسم الأغنية 🎵\n╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰`, threadID, messageID);
+    return api.sendMessage(`╮── ▽ 「 تنبيه 」\n│ يرجى كتابة اسم الأغنية يا ملك ○\n╯────────────── 🝓`, threadID, messageID);
   }
 
   try {
     api.setMessageReaction("🔍", messageID, () => {}, true);
 
-    const searchData = (await Youtube.GetListByKeyword(input, false, 6)).items;
-    if (!searchData || searchData.length === 0) throw new Error("لم يتم العثور على نتائج.");
+    // البحث عن 6 نتائج
+    const searchResults = await Youtube.GetListByKeyword(input, false, 6);
+    const items = searchResults.items;
 
-    let msg = `╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭\n     ${botName} PLAYER 🎧\n╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰\n\n`;
+    if (!items || items.length === 0) return api.sendMessage("○ لم أجد شيئاً.. حاول بكلمات أخرى", threadID, messageID);
+
+    let msg = `╮─────── 🝓 ───────╭\n    𝖪 𝖠 𝖨 𝖱 𝖴 𝖲   𝖯 𝖫 𝖠 𝖸 𝖤 𝖱\n╯─────── 🝓 ───────╰\n\n`;
     let links = [];
 
-    searchData.forEach((item, index) => {
-      links.push(item.id);
-      msg += ` ⬡ ${index + 1} ─ ${item.title.substring(0, 45)}...\n`;
-    });
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const duration = item.length ? item.length.simpleText : "??:??";
+      links.push({ id: item.id, title: item.title });
+      
+      msg += `│  ▱  ${i + 1}  ○  ${item.title.substring(0, 35)}...\n`;
+      msg += `│      ⏲️ الـمدة: ${duration}\n`;
+      if (i < items.length - 1) msg += `│\n`;
+    }
 
-    msg += `\n╮───────────────────╭\n  رد برقم الأغنية للتحميل ✅\n╯───────────────────╰`;
+    msg += `\n╮─────── 🝓 ───────╭\n│ رد برقم الأغنية للتحميل ○\n│ المطور : DANTE\n╯─────── 🝓 ───────╰`;
 
     return api.sendMessage(msg, threadID, (error, info) => {
       global.client.handleReply.push({
@@ -52,8 +57,8 @@ module.exports.run = async function({ api, event, args }) {
     }, messageID);
 
   } catch (e) {
-    api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage(`⚠️ خطأ في البحث: ${e.message}`, threadID, messageID);
+    console.error(e);
+    return api.sendMessage(`╮── ▽ 「 خطأ 」\n│ فشل محرك البحث حالياً\n╯─────── 🝓`, threadID, messageID);
   }
 };
 
@@ -64,58 +69,52 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
   const index = parseInt(body);
   if (isNaN(index) || index < 1 || index > handleReply.links.length) return;
 
+  // حذف قائمة البحث فور الاختيار
   api.unsendMessage(handleReply.messageID);
 
-  const videoId = handleReply.links[index - 1];
-  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-  return downloadAndSend(videoUrl, videoId, api, event);
-};
-
-async function downloadAndSend(url, videoId, api, event) {
-  const { threadID, messageID } = event;
-  const cachePath = path.join(__dirname, 'cache');
-  if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
-
-  const filePath = path.join(cachePath, `${crypto.randomBytes(4).toString('hex')}.mp3`);
-  const adminName = global.config.AMDIN_NAME || "انجالاتي";
+  const target = handleReply.links[index - 1];
+  const videoUrl = `https://www.youtube.com/watch?v=${target.id}`;
+  const cachePath = path.join(__dirname, 'cache', `${target.id}.mp3`);
 
   try {
     api.setMessageReaction("📥", messageID, () => {}, true);
+    
+    const loadingMsg = await api.sendMessage(`╮─── ▽ 「 جاري التحميل 」\n│ يتم الآن معالجة: ${target.title.substring(0, 20)}...\n╯────────────── 🝓`, threadID);
 
-    // 🔥 التحميل باستخدام ytdl-core (بدون API)
-    const stream = ytdl(url, {
-      filter: "audioonly",
-      quality: "highestaudio"
-    });
+    // استخدام API خارجي مستقر للتحويل لضمان تخطي قيود يوتيوب
+    const downloadApi = `https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(videoUrl)}`;
+    const res = await axios.get(downloadApi);
+    
+    if (!res.data || !res.data.result || !res.data.result.download) throw new Error("فشل الرابط");
 
-    const writer = fs.createWriteStream(filePath);
-    stream.pipe(writer);
-
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-
-    const stats = fs.statSync(filePath);
-    if (stats.size > 26214400) {
-      fs.unlinkSync(filePath);
-      return api.sendMessage("⚠️ عذراً.. الأغنية أكبر من 25MB.", threadID, messageID);
+    const fileRes = await axios.get(res.data.result.download, { responseType: "arraybuffer" });
+    
+    // إظهار الحجم التقريبي
+    const fileSizeMB = (fileRes.data.byteLength / (1024 * 1024)).toFixed(2);
+    
+    if (fileSizeMB > 25) {
+        api.unsendMessage(loadingMsg.messageID);
+        return api.sendMessage("⚠️ الملف كبير جداً (أكثر من 25 ميجا)", threadID, messageID);
     }
 
-    const msg = {
-      body: `╮───────┈◈ ⦗ ✧ ⦘ ◈┈───────╭\n     DOWNLOAD SUCCESS ✅\n╯───────┈◈ ⦗ ✧ ⦘ ◈┈───────╰\n\n⋄ الـمـطور : ${adminName}\n⋄ الـحـالة : تـم الـتـحـمـيل\n\n╮───────────────────╭\n  اسـتـمـاعـاً مـمـتـعـاً لـك 🤍\n╯───────────────────╰`,
-      attachment: fs.createReadStream(filePath)
-    };
+    fs.ensureDirSync(path.join(__dirname, 'cache'));
+    fs.writeFileSync(cachePath, Buffer.from(fileRes.data));
 
-    return api.sendMessage(msg, threadID, () => {
-      fs.unlinkSync(filePath);
+    api.unsendMessage(loadingMsg.messageID);
+
+    const report = `╮─────── 🝓 ───────╭\n    𝖣 𝖮 𝖶 𝖭 𝖫 𝖮 𝖠 𝖣   𝖮 𝖪\n╯─────── 🝓 ───────╰\n│ ⌑ الحالة : تم التحميل ○\n│ ⌑ الحجم : ${fileSizeMB} MB\n│ ⌑ المطور : DANTE\n╯────────────── 🝓`;
+
+    await api.sendMessage({
+      body: report,
+      attachment: fs.createReadStream(cachePath)
+    }, threadID, () => {
+      fs.unlinkSync(cachePath);
       api.setMessageReaction("✅", messageID, () => {}, true);
     }, messageID);
 
   } catch (e) {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    console.error(e);
     api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage("❌ فشل تحميل الأغنية. حاول لاحقاً.", threadID, messageID);
+    return api.sendMessage("╮── ▽ 「 خطأ 」\n│ نعتذر.. تعذر تحميل هذا الملف حالياً\n╯─────── 🝓", threadID, messageID);
   }
-}
+};
