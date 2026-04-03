@@ -4,10 +4,10 @@ const path = require("path");
 
 module.exports.config = {
   name: "موسوعة",
-  version: "2.5.0",
+  version: "2.6.0",
   hasPermssion: 0,
-  credits: "ڪايࢪوس",
-  description: "بحث معلوماتي شامل باللغة العربية",
+  credits: "DANTE",
+  description: "بحث معلوماتي شامل باللغة العربية (استايل كايروس)",
   commandCategory: "الخدمات",
   usages: "[الموضوع]",
   cooldowns: 5
@@ -17,67 +17,65 @@ module.exports.run = async function ({ api, event, args }) {
   const { threadID, messageID } = event;
   const query = args.join(" ");
 
-  if (!query) return api.sendMessage("╭── • 📥 • ──╮\n  ماذا تريد أن تتعلم اليوم؟\n╰── • 📥 • ──╯", threadID, messageID);
+  if (!query) {
+    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ ماذا تريد أن تتعلم اليوم؟ ○\n╯────────────── 🝓", threadID, messageID);
+  }
 
   api.setMessageReaction("🔍", messageID, () => {}, true);
 
   try {
-    // 1. محاولة جلب البيانات من ويكيبيديا (العربية أولاً)
+    // محاولة جلب البيانات من ويكيبيديا العربية
     let url = `https://ar.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
     let response;
-    
+
     try {
       response = await axios.get(url);
     } catch (e) {
-      // 2. إذا لم يجد بالعربية، يجلب من الإنجليزية لضمان النتيجة
+      // إذا فشل، البحث في الإنجليزية
       url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
       response = await axios.get(url);
     }
 
-    let { title, extract, thumbnail, content_urls } = response.data;
+    const data = response.data;
+    let title = data.title;
+    let description = data.extract;
 
-    // 3. وظيفة الترجمة التلقائية للعربية (إذا كانت النتيجة أجنبية)
-    const translate = async (text) => {
+    // وظيفة الترجمة إذا كان المحتوى غير عربي
+    const translateText = async (text) => {
       const res = await axios.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=${encodeURIComponent(text)}`);
       return res.data[0].map(item => item[0]).join("");
     };
 
-    // تعريب المحتوى إذا لم يكن عربياً
-    let finalTitle = title;
-    let finalDescription = extract;
-
-    // فحص إذا كان النص يحتوي على حروف عربية، إذا لا -> ترجمه
-    if (!/[\u0600-\u06FF]/.test(finalDescription)) {
-      api.sendMessage("⏳ جاري تعريب المعلومات...", threadID, messageID);
-      finalTitle = await translate(title);
-      finalDescription = await translate(extract);
+    // فحص اللغة والترجمة عند الحاجة
+    if (!/[\u0600-\u06FF]/.test(description)) {
+      api.setMessageReaction("⏳", messageID, () => {}, true);
+      title = await translateText(title);
+      description = await translateText(description);
     }
 
-    const msg = `╭── • ڪايࢪوس • ──╮\n` +
-                 `  ⌈ الـمـوسـوعـة الـذكـيـة ⌋\n` +
-                 `╰── • 📚 • ──╯\n\n` +
-                 `📌 الـمـوضـوع: ${finalTitle}\n\n` +
-                 `📝 الـمـلـخص الـعـربـي:\n${finalDescription}\n\n` +
-                 `🔗 الـرابط الأصـلي:\n${content_urls.desktop.page}\n\n` +
-                 `『 ⚙︎ ڪايࢪوس  ͡🦋͜  𝑩𝑶𝑻 』`;
+    const report = `╮─────── 🝓 ───────╭\n    𝖪 𝖠 𝖨 𝖱 𝖴 𝖲   𝖶 𝖨 𝖪 𝖨\n╯─────── 🝓 ───────╰\n\n│ ⌑ الموضوع : ${title}\n\n│ ⌑ الملخص :\n│ ${description.substring(0, 500)}...\n\n│ ⌑ المطور : DANTE\n╯────────────── 🝓`;
 
-    // 4. معالجة الصورة وإرسالها
-    if (thumbnail && thumbnail.source) {
-      const imgPath = path.join(__dirname, "cache", `wiki_${Date.now()}.png`);
-      const imgRes = await axios.get(thumbnail.source, { responseType: "arraybuffer" });
-      await fs.outputFile(imgPath, Buffer.from(imgRes.data, "binary"));
+    api.setMessageReaction("✅", messageID, () => {}, true);
 
-      api.setMessageReaction("✅", messageID, () => {}, true);
+    // معالجة الصورة المرفقة
+    if (data.thumbnail && data.thumbnail.source) {
+      const cacheDir = path.join(__dirname, "cache");
+      if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+      
+      const imgPath = path.join(cacheDir, `wiki_${Date.now()}.png`);
+      const imgRes = await axios.get(data.thumbnail.source, { responseType: "arraybuffer" });
+      fs.writeFileSync(imgPath, Buffer.from(imgRes.data));
+
       return api.sendMessage({
-        body: msg,
+        body: report,
         attachment: fs.createReadStream(imgPath)
       }, threadID, () => fs.unlinkSync(imgPath), messageID);
     } else {
-      return api.sendMessage(msg, threadID, messageID);
+      return api.sendMessage(report, threadID, messageID);
     }
 
   } catch (error) {
     api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage("⚠️ لم يتم العثور على معلومات كافية حول هذا الموضوع باللغة العربية.", threadID, messageID);
+    return api.sendMessage("╮── ▽ 「 خطأ 」\n│ لم يتم العثور على معلومات كافية ○\n╯────────────── 🝓", threadID, messageID);
   }
 };
