@@ -7,6 +7,7 @@ const CFonts = require("cfonts");
 const { spawn } = require("child_process");
 const axios = require("axios");
 const logger = require("./utils/log");
+const { updateToken } = require("./autoRefresh.js");
 
 // ======================
 // 🔒 Anti Duplicate
@@ -87,8 +88,11 @@ console.log(
 let botProcess = null;
 let failCount = 0;
 
-function startBot(msg) {
+async function startBot(msg) {
   if (msg) logger(msg, "SYSTEM");
+
+  // تحديث التوكن تلقائياً قبل تشغيل ملف البوت
+  await updateToken();
 
   failCount++;
   if (failCount > 5) {
@@ -138,8 +142,9 @@ setInterval(() => {
   }
 }, 60000);
 
+// إعادة تشغيل كاملة كل 24 ساعة لضمان تحديث التوكن من الصفر
 setTimeout(() => {
-  console.log(chalk.magenta("♻️ 24h restart"));
+  console.log(chalk.magenta("♻️ 24h restart & Token Refresh"));
   if (botProcess && !botProcess.killed) botProcess.kill('SIGTERM');
   setTimeout(() => process.exit(0), 3000);
 }, 24 * 60 * 60 * 1000);
