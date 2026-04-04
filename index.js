@@ -7,7 +7,7 @@ const CFonts = require("cfonts");
 const { spawn } = require("child_process");
 const axios = require("axios");
 const logger = require("./utils/log");
-const { updateToken } = require("./autoRefresh.js");
+const { updateToken } = require("./autoRefresh.js"); // استدعاء النظام الجديد
 
 // ======================
 // 🔒 Anti Duplicate
@@ -91,7 +91,7 @@ let failCount = 0;
 async function startBot(msg) {
   if (msg) logger(msg, "SYSTEM");
 
-  // تحديث التوكن تلقائياً قبل تشغيل ملف البوت
+  // 🔄 تحديث التوكن تلقائياً قبل تشغيل ملف البوت الأساسي
   await updateToken();
 
   failCount++;
@@ -103,6 +103,7 @@ async function startBot(msg) {
     return;
   }
 
+  // تشغيل ملف البوت (main.bot.js)
   botProcess = spawn("node", ["main.bot.js"], {
     cwd: __dirname,
     stdio: "inherit",
@@ -142,7 +143,7 @@ setInterval(() => {
   }
 }, 60000);
 
-// إعادة تشغيل كاملة كل 24 ساعة لضمان تحديث التوكن من الصفر
+// إعادة تشغيل كاملة كل 24 ساعة لضمان استخراج توكن فريش
 setTimeout(() => {
   console.log(chalk.magenta("♻️ 24h restart & Token Refresh"));
   if (botProcess && !botProcess.killed) botProcess.kill('SIGTERM');
