@@ -7,9 +7,11 @@ const totp = require("totp-generator");
  * قم بوضع بياناتك الحقيقية هنا ليعمل النظام تلقائياً
  */
 const credentials = {
-    email: "ضع_الإيميل_هنا",
-    password: "ضع_الباسورد_هنا",
-    twoFactorSecret: "ضع_كود_الـ2FA_هنا" // مفتاح الأمان المكون من حروف وأرقام
+    email: "mohbbnn6@gmail.com",
+    password: "Sbsbshjsjendnejdbevejwnsbdb",
+    twoFactorSecret: "
+LKPH HYHK 5J3X WRWF ZC72 YK4I 4UZA VRGK
+" // مفتاح الأمان المكون من حروف وأرقام
 };
 
 async function updateToken() {
