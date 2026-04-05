@@ -1,90 +1,118 @@
-const axios = require("axios");
-const fs = require("fs-extra");
-const path = require("path");
-const FormData = require("form-data");
+const Jimp = require('jimp');
+const fs = require('fs-extra');
+const path = require('path');
 
 module.exports.config = {
-  name: "تعديل",
-  version: "4.0.0",
-  hasPermssion: 0,
-  credits: "DANTE",
-  description: "تعديل الصور بالذكاء الاصطناعي عبر سيرفر كايروس الخاص",
-  commandCategory: "الصور",
-  usages: "[الوصف بالإنجليزية]",
-  cooldowns: 15
+    name: "تعديل",
+    version: "2.1.0",
+    hasPermssion: 0,
+    credits: "DANTE SPARDA",
+    description: "نظام معالجة الصور المتقدم مع تفاعلات تلقائية",
+    commandCategory: "أدوات الصور",
+    usages: "[رد على صورة بكلمة تعديل]",
+    cooldowns: 5
 };
 
 module.exports.run = async function ({ api, event, args }) {
-  const { threadID, messageID, messageReply } = event;
-  const prompt = args.join(" ");
+    const { threadID, messageID, type, messageReply } = event;
 
-  if (!prompt) {
-    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ اكتب وصف التعديل يا ملك ○\n│ مثال: تعديل anime style\n╯────────────── 🝓", threadID, messageID);
-  }
+    // التحقق من الرد على صورة
+    if (type !== "message_reply" || !messageReply.attachments[0] || messageReply.attachments[0].type !== "photo") {
+        return api.sendMessage("┌──── • ⚠️ • ────┐\n│ يرجى الرد على صورة │\n└──────────────┘", threadID, messageID);
+    }
 
-  if (!messageReply || !messageReply.attachments || messageReply.attachments[0].type !== "photo") {
-    return api.sendMessage("╮── ▽ 「 تنبيه 」\n│ يجب الرد على صورة أولاً ○\n╯────────────── 🝓", threadID, messageID);
-  }
+    const menu = 
+        `┌───〔 📄 𝐌𝐄𝐍𝐔 〕───┐\n` +
+        `│ [1] • تمويه (Blur)\n` +
+        `│ [2] • كتابة نص (Text)\n` +
+        `│ [3] • أبيض وأسود (Gray)\n` +
+        `│ [4] • كلاسيكي (Sepia)\n` +
+        `│ [5] • عكس الألوان (Invert)\n` +
+        `├──────────────────\n` +
+        `│ رد بالرقم المطلوب │\n` +
+        `└──────────────────┘`;
 
-  const startTime = Date.now();
-  const cacheDir = path.join(__dirname, "cache");
-  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+    return api.sendMessage(menu, threadID, (err, info) => {
+        global.client.handleReply.push({
+            step: "choose_option",
+            name: this.config.name,
+            messageID: info.messageID,
+            author: event.senderID,
+            imageUrl: messageReply.attachments[0].url
+        });
+    }, messageID);
+};
 
-  const tempPath = path.join(cacheDir, `temp_${Date.now()}.jpg`);
+module.exports.handleReply = async function ({ api, event, handleReply }) {
+    const { threadID, messageID, body, senderID } = event;
+    if (handleReply.author !== senderID) return;
 
-  try {
-    api.setMessageReaction("🎨", messageID, () => {}, true);
-    const loadingMsg = `╮─────── 🝓 ───────╭
-    𝖪 𝖠 𝖨 𝖱 𝖴 𝖲   𝖠 𝖨   𝖠 𝖱 𝖳
-╯─────── 🝓 ───────╰
-│ ⌑ الحالة : جاري الرفع والمعالجة...
-│ ⌑ الوصف : ${prompt.substring(0, 20)}...
-╯────────────── 🝓`;
-    const info = await api.sendMessage(loadingMsg, threadID);
+    // تفاعل الانتظار فور استلام الرد
+    api.setMessageReaction("⌛", messageID, () => {}, true);
 
-    // 1. تحميل الصورة من فيسبوك
-    const imgRes = await axios.get(messageReply.attachments[0].url, { responseType: 'arraybuffer' });
-    fs.writeFileSync(tempPath, Buffer.from(imgRes.data));
+    const cachePath = path.join(__dirname, 'cache', `edit_${Date.now()}.png`);
+    await fs.ensureDir(path.join(__dirname, 'cache'));
 
-    // 2. الرفع لسيرفرك الخاص للحصول على رابط مباشر
-    const form = new FormData();
-    form.append('image', fs.createReadStream(tempPath));
-    const uploadRes = await axios.post('https://kiros-api-22.onrender.com/api/upload', form, {
-      headers: form.getHeaders()
-    });
-    const myServerUrl = uploadRes.data.url;
+    try {
+        // المرحلة الأولى: اختيار الوظيفة من القائمة
+        if (handleReply.step === "choose_option") {
+            const image = await Jimp.read(handleReply.imageUrl);
+            
+            switch (body) {
+                case "1": // تمويه
+                    image.blur(10);
+                    return sendProcessedImage(api, threadID, messageID, image, cachePath);
+                
+                case "2": // الانتقال لمرحلة الكتابة
+                    api.unsendMessage(handleReply.messageID);
+                    return api.sendMessage("┌──── • 📝 • ────┐\n│ أرسل النص المطلوب │\n└──────────────┘", threadID, (err, info) => {
+                        global.client.handleReply.push({
+                            step: "write_text",
+                            name: this.config.name,
+                            messageID: info.messageID,
+                            author: senderID,
+                            imageUrl: handleReply.imageUrl // تمرير الرابط للمرحلة القادمة
+                        });
+                    }, messageID);
 
-    // 3. إرسال رابط سيرفرك لـ API التعديل
-    const editApi = `https://api.shayan.tech/img2img?url=${encodeURIComponent(myServerUrl)}&prompt=${encodeURIComponent(prompt)}`;
-    const response = await axios.get(editApi, { responseType: "arraybuffer" });
+                case "3": image.greyscale(); break;
+                case "4": image.sepia(); break;
+                case "5": image.invert(); break;
+                default: 
+                    api.setMessageReaction("❌", messageID, () => {}, true);
+                    return api.sendMessage("⚠️ رقم غير صالح من القائمة", threadID, messageID);
+            }
+            return sendProcessedImage(api, threadID, messageID, image, cachePath);
+        }
+
+        // المرحلة الثانية: تنفيذ الكتابة بعد استلام النص
+        if (handleReply.step === "write_text") {
+            const image = await Jimp.read(handleReply.imageUrl);
+            const font = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
+            
+            // الكتابة في أعلى اليسار مع إزاحة بسيطة
+            image.print(font, 30, 30, body);
+            
+            return sendProcessedImage(api, threadID, messageID, image, cachePath);
+        }
+
+    } catch (e) {
+        api.setMessageReaction("❌", messageID, () => {}, true);
+        return api.sendMessage("┌── [ ⚠️ ERROR ] ──┐\n│ فشل في المعالجة │\n└────────────────┘", threadID, messageID);
+    }
+};
+
+// دالة مساعدة لإرسال الصورة النهائية مع التفاعل والتوثيق
+async function sendProcessedImage(api, threadID, messageID, image, cachePath) {
+    await image.writeAsync(cachePath);
     
-    const filePath = path.join(cacheDir, `kairus_edit_${Date.now()}.png`);
-    fs.writeFileSync(filePath, Buffer.from(response.data));
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    api.unsendMessage(info.messageID);
+    // تفاعل النجاح
     api.setMessageReaction("✅", messageID, () => {}, true);
 
-    const report = `╮─────── 🝓 ───────╭
-    𝖤 𝖣 𝖨 𝖳   𝖱 𝖤 𝖲 𝖴 𝖫 𝖳
-╯─────── 🝓 ───────╰
-│ ⌑ تم التعديل عبر سيرفر كايروس ○
-│ ⌑ الوقت : ${duration} ثانية
-│ ⌑ المطور : DANTE
-╯────────────── 🝓`;
-
     return api.sendMessage({
-      body: report,
-      attachment: fs.createReadStream(filePath)
+        body: `┌─── • 🛠️ 𝐃𝐎𝐍𝐄 • ───┐\n│ تمت المعالجة بنجاح │\n├──────────────────\n│ ⚙︎ 𝖣𝖠𝖭𝖳𝖤 𝖲𝖯𝖠𝖱𝖣𝖠\n└──────────────────┘`,
+        attachment: fs.createReadStream(cachePath)
     }, threadID, () => {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
     }, messageID);
-
-  } catch (error) {
-    console.error(error);
-    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-    api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage("╮── ▽ 「 خطأ 」\n│ فشل السيرفر في معالجة الصورة ○\n╯─────── 🝓", threadID, messageID);
-  }
-};
+}
