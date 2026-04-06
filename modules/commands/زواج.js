@@ -1,61 +1,66 @@
-const Canvas = require('canvas');
-const fs = require('fs-extra');
-const path = require('path');
-const axios = require('axios');
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
+const Canvas = require("canvas");
 
 module.exports.config = {
     name: "زواج",
-    version: "1.2.0",
+    version: "2.5.0",
     hasPermssion: 0,
     credits: "DANTE SPARDA",
-    description: "إصدار عقد زواج فخم مع دمج الصور في الكاش",
+    description: "إصدار عقد زواج عبر الرد أو المنشن (KAIRUS STYLE)",
     commandCategory: "ترفيه",
-    usages: "[@منشن1 @منشن2]",
-    cooldowns: 15
+    usages: "[رد على رسالة أو منشن شخص]",
+    cooldowns: 10
 };
 
-module.exports.run = async function ({ api, event, args, Users }) {
-    const { threadID, messageID, mentions } = event;
-    const mentionIDs = Object.keys(mentions);
+module.exports.run = async function ({ api, event, args }) {
+    const { threadID, messageID, senderID, messageReply, type, mentions } = event;
 
-    if (mentionIDs.length < 2) {
-        return api.sendMessage("╭─── 𖦆 𝐖𝐀𝐑𝐍𝐈𝐍𝐆 𖦆 ───╮\n┃ ⚬ يرجى منشن شخصين لإتمام الزواج\n┃ ⚬ مثال: /زواج @فلان @فلانة\n╰───────────────────╯", threadID, messageID);
+    let id1 = senderID; // الطرف الأول هو أنت دائماً
+    let id2;
+
+    // 1. تحديد الطرف الثاني (إما عبر الرد أو عبر المنشن)
+    if (type === "message_reply") {
+        id2 = messageReply.senderID;
+    } else if (Object.keys(mentions).length > 0) {
+        id2 = Object.keys(mentions)[0];
+    } else {
+        return api.sendMessage("╭─── 𖦆 𝐖𝐀𝐑𝐍𝐈𝐍𝐆 𖦆 ───╮\n┃ ⚬ يرجى الرد على رسالة الشخص\n┃ ⚬ أو منشن شخص لإتمام الزواج\n╰───────────────────╯", threadID, messageID);
     }
 
-    const id1 = mentionIDs[0];
-    const id2 = mentionIDs[1];
+    // منع الزواج من النفس (اختياري)
+    if (id1 == id2) return api.sendMessage("┃ ⚬ لا يمكنك عقد قرانك على نفسك!", threadID, messageID);
 
-    api.setMessageReaction("⌛", messageID, () => {}, true);
-
-    // استخدام مجلد الكاش الموجود عندك
-    const cachePath = path.join(__dirname, 'cache', `marriage_${id1}_${id2}.png`);
-    const templatePath = path.join(__dirname, 'cache', 'marriage_template.png');
+    api.setMessageReaction("💍", messageID, () => {}, true);
 
     try {
-        const name1 = await Users.getNameUser(id1);
-        const name2 = await Users.getNameUser(id2);
-        
+        // جلب الأسماء
+        const info1 = await api.getUserInfo(id1);
+        const info2 = await api.getUserInfo(id2);
+        const name1 = info1[id1].name;
+        const name2 = info2[id2].name;
+
+        // الروابط
         const avatarUrl1 = `https://graph.facebook.com/${id1}/picture?height=720&width=720&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
         const avatarUrl2 = `https://graph.facebook.com/${id2}/picture?height=720&width=720&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
+        const templateUrl = "https://i.postimg.cc/pTfXz5Z9/marriage-card.png";
 
-        // إذا القالب مش موجود في الكاش، نحمله من رابط خارجي لضمان التشغيل
-        if (!fs.existsSync(templatePath)) {
-            const res = await axios.get("https://i.postimg.cc/pTfXz5Z9/marriage-card.png", { responseType: 'arraybuffer' });
-            fs.writeFileSync(templatePath, Buffer.from(res.data));
-        }
-
-        const [avatar1, avatar2, template] = await Promise.all([
-            Canvas.loadImage(avatarUrl1),
-            Canvas.loadImage(avatarUrl2),
-            Canvas.loadImage(templatePath)
+        // التحميل (بنية سينما)
+        const [res1, res2, resTemp] = await Promise.all([
+            axios.get(avatarUrl1, { responseType: 'arraybuffer' }),
+            axios.get(avatarUrl2, { responseType: 'arraybuffer' }),
+            axios.get(templateUrl, { responseType: 'arraybuffer' })
         ]);
+
+        const avatar1 = await Canvas.loadImage(Buffer.from(res1.data));
+        const avatar2 = await Canvas.loadImage(Buffer.from(res2.data));
+        const template = await Canvas.loadImage(Buffer.from(resTemp.data));
 
         const canvas = Canvas.createCanvas(template.width, template.height);
         const ctx = canvas.getContext('2d');
-
         ctx.drawImage(template, 0, 0, canvas.width, canvas.height);
 
-        // رسم الصور الشخصية دائرية
         const drawAvatar = (image, x, y, size) => {
             ctx.save();
             ctx.beginPath();
@@ -64,34 +69,27 @@ module.exports.run = async function ({ api, event, args, Users }) {
             ctx.clip();
             ctx.drawImage(image, x, y, size, size);
             ctx.restore();
-            
-            // إطار نيون منحني
-            ctx.strokeStyle = '#ffb3ba';
-            ctx.lineWidth = 8;
+            ctx.strokeStyle = '#ff66b2';
+            ctx.lineWidth = 10;
             ctx.stroke();
         };
 
-        drawAvatar(avatar1, 160, 150, 280); // موقع الزوج الأول
-        drawAvatar(avatar2, 760, 150, 280); // موقع الزوج الثاني
+        drawAvatar(avatar1, 150, 140, 290); 
+        drawAvatar(avatar2, 770, 140, 290); 
 
-        // كتابة الأسماء بستايل كايروس
-        ctx.font = 'bold 45px Arial';
+        ctx.font = 'bold 48px Arial';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
-        ctx.shadowColor = '#ff66b2';
-        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 15;
         
-        ctx.fillText(name1, 300, 500);
-        ctx.fillText(name2, 900, 500);
-        
-        ctx.shadowBlur = 0;
+        ctx.fillText(name1, 295, 520);
+        ctx.fillText(name2, 915, 520);
 
-        const buffer = canvas.toBuffer();
-        fs.writeFileSync(cachePath, buffer);
+        const cachePath = path.join(__dirname, 'cache', `marry_${Date.now()}.png`);
+        fs.writeFileSync(cachePath, canvas.toBuffer());
 
-        api.setMessageReaction("💖", messageID, () => {}, true);
-        
-        const loveMsg = 
+        const msg = 
             `╭─── 𖦆 𝐌𝐀𝐑𝐑𝐈𝐀𝐆𝐄 𖦆 ───╮\n` +
             `┃ ⚬ تـم عـقـد الـقـران بـنـجـاح ✅\n` +
             `┃ ⚬ الـزوج ➔ ${name1}\n` +
@@ -101,16 +99,17 @@ module.exports.run = async function ({ api, event, args, Users }) {
             `┃ ꗯ 𝖣𝖠𝖭𝖳𝖤 𝖲𝖯开𝐑𝐃𝐀 𖦹\n` +
             `╰───────────────────╯`;
 
+        api.setMessageReaction("💖", messageID, () => {}, true);
+
         return api.sendMessage({
-            body: loveMsg,
+            body: msg,
             attachment: fs.createReadStream(cachePath)
         }, threadID, () => {
-            if(fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+            if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
         }, messageID);
 
     } catch (e) {
         console.error(e);
-        api.setMessageReaction("❌", messageID, () => {}, true);
-        return api.sendMessage(`╭─── 𖦆 𝐄𝐑𝐑𝐎𝐑 𖦆 ───╮\n┃ ⚬ فشل بسبب: ${e.message}\n╰───────────────────╯`, threadID, messageID);
+        return api.sendMessage("╭─── 𖦆 𝐄𝐑𝐑𝐎𝐑 𖦆 ───╮\n┃ ⚬ فشل نظام الزواج حالياً\n╰───────────────────╯", threadID, messageID);
     }
 };
