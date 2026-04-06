@@ -19,7 +19,7 @@ module.exports.config = {
 module.exports.run = async function ({ api, event, args }) {
     const { threadID, messageID, messageReply, type } = event;
 
-    // 1. عرض الموديلات
+    // 1. عرض الموديلات بستايل كايروس
     if (args[0] === "موديلات" || args[0] === "قائمة") {
         api.setMessageReaction("📋", messageID, () => {}, true);
         const models = await getModelsList();
@@ -27,7 +27,7 @@ module.exports.run = async function ({ api, event, args }) {
         models.slice(0, 15).forEach(m => {
             msg += `┃ ⚬ ${m.originalIndex} ➔ ${m.name}\n`;
         });
-        msg += `┝───────────────┤\n┃ ꗯ 𝖣𝖠𝖭𝖳𝖤 𝖲𝖯𝖠𝖱𝖣𝖠 𖦹\n╰───────────────────╯`;
+        msg += `┝───────────────┤\n┃ ꗯ 𝖣𝖠𝖭𝖳𝖤 𝖲𝖯开𝐑𝐃𝐀 𖦹\n╰───────────────────╯`;
         return api.sendMessage(msg, threadID, messageID);
     }
 
@@ -37,13 +37,13 @@ module.exports.run = async function ({ api, event, args }) {
     }
 
     const styleNum = parseInt(args[0]) || 29;
-    const models = await getModelsList();
-    if (styleNum < 0 || styleNum >= models.length) return api.sendMessage("❌ رقم الستايل غير موجود", threadID, messageID);
+    const modelsList = await getModelsList();
+    if (styleNum < 0 || styleNum >= modelsList.length) return api.sendMessage("╭─── 𖦆 𝐄𝐑𝐑𝐎𝐑 𖦆 ───╮\n┃ ⚬ رقم الستايل غير موجود\n╰───────────────────╯", threadID, messageID);
 
-    const selectedStyle = models[styleNum];
+    const selectedStyle = modelsList[styleNum];
     api.setMessageReaction("⌛", messageID, () => {}, true);
 
-    const waitMsg = await new Promise(res => api.sendMessage(`╭─── 𖦆 𝐏𝐑𝐎𝐂𝐄𝐒𝐒 𖦆 ───╮\n┃ ⚬ الستايل: ${selectedStyle.name}\n┃ ⚬ جاري الابتكار... ₍•᷄ - •᷅₎\n╰───────────────────╯`, threadID, (err, info) => res(info)));
+    const waitMsg = await new Promise(res => api.sendMessage(`╭─── 𖦆 𝐏𝐑𝐎𝐂𝐄𝐒𝐒 𖦆 ───╮\n┃ ⚬ الستايل: ${selectedStyle.name}\n┃ ⚬ جاري الابتكار... ₍•᷄ - •᷅₎\n╰───────────────────╯`, threadID, (err, info) => res(info), messageID));
 
     const cachePath = path.join(__dirname, 'cache', `art_${Date.now()}.png`);
     await fs.ensureDir(path.join(__dirname, 'cache'));
@@ -96,19 +96,21 @@ module.exports.run = async function ({ api, event, args }) {
         api.setMessageReaction("✅", messageID, () => {}, true);
 
         return api.sendMessage({
-            body: `╭─── 𖦆 𝐀𝐑𝐓 𝐃𝐎𝐍𝐄 𖦆 ───╮\n┃ ⚬ الستايل: ${selectedStyle.name}\n┝───────────────┤\n┃ ꗯ 𝖣𝖠𝖭𝖳𝖤 𝖲𝖯𝖠𝖱𝖣𝖠 𖦹\n╰───────────────────╯`,
+            body: `╭─── 𖦆 𝐀𝐑𝐓 𝐃𝐎𝐍𝐄 𖦆 ───╮\n┃ ⚬ الـحـالـة: تـم الـتـحويل ✨\n┃ ⚬ الـسـتايـل: ${selectedStyle.name}\n┝───────────────┤\n┃ ꗯ 𝖣𝖠𝖭𝖳𝖤 𝖲𝖯开𝐑𝐃𝐀 𖦹\n╰───────────────────╯`,
             attachment: finalImg
-        }, threadID, () => fs.unlinkSync(cachePath), messageID);
+        }, threadID, () => { if(fs.existsSync(cachePath)) fs.unlinkSync(cachePath) }, messageID);
 
     } catch (e) {
-        api.unsendMessage(waitMsg.messageID);
+        if (waitMsg) api.unsendMessage(waitMsg.messageID);
         api.setMessageReaction("❌", messageID, () => {}, true);
-        return api.sendMessage(`⚠️ فشل: ${e.message}`, threadID, messageID);
+        return api.sendMessage(`╭─── 𖦆 𝐄𝐑𝐑𝐎𝐑 𖦆 ───╮\n┃ ⚬ فشل بسبب: ${e.message}\n╰───────────────────╯`, threadID, messageID);
     }
 };
 
 async function getModelsList() {
-    const id = 'fe20871' + crypto.randomBytes(4).toString('hex');
-    const res = await axios.get(`https://be.aimirror.fun/filter_search?uid=${id}`);
-    return res.data.search_info.filter(i => !i.key_words.includes("video")).map((i, index) => ({ id: i.model_id, name: i.model, originalIndex: index }));
+    try {
+        const id = 'fe20871' + crypto.randomBytes(4).toString('hex');
+        const res = await axios.get(`https://be.aimirror.fun/filter_search?uid=${id}`);
+        return res.data.search_info.filter(i => !i.key_words.includes("video")).map((i, index) => ({ id: i.model_id, name: i.model, originalIndex: index }));
+    } catch (e) { return []; }
 }
