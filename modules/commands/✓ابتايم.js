@@ -1,50 +1,52 @@
 module.exports.config = {
   name: "ابتايم",
-  version: "1.8.0",
+  version: "2.3.0",
   hasPermssion: 0,
   credits: "Mustapha",
-  description: "إحصائيات النظام ستايل V6 العربي",
+  description: "إحصائيات النظام ستايل دوائر رقيقة",
   commandCategory: "النظام",
   usages: "ابتايم",
   cooldowns: 3
 };
 
-module.exports.run = async function ({ api, event, Users }) {
+module.exports.run = async function ({ api, event }) {
   const moment = require("moment-timezone");
 
-  // تفاعل البوت
-  api.setMessageReaction("⌛", event.messageID, () => {}, true);
+  // تفاعل
+  api.setMessageReaction("⚡", event.messageID, () => {}, true);
 
   const uptime = process.uptime();
-  const h = Math.floor(uptime / 3600);
-  const m = Math.floor((uptime % 3600) / 60);
-  const s = Math.floor(uptime % 60);
+  const days = Math.floor(uptime / (24 * 3600));
+  const hours = Math.floor((uptime % (24 * 3600)) / 3600);
+  const mins = Math.floor((uptime % 3600) / 60);
+  const secs = Math.floor(uptime % 60);
+
+  const tz = "Africa/Khartoum";
+  const time = moment.tz(tz).format("hh:mm:ss A");
+  const date = moment.tz(tz).format("YYYY/MM/DD");
+  const dayName = moment.tz(tz).locale("ar").format("dddd");
 
   const threads = await api.getThreadList(100, null, ["INBOX"]);
   const groupCount = threads.filter(t => t.isGroup).length;
 
-  // تنسيق الوقت 12 ساعة
-  const time = moment.tz("Africa/Khartoum").format("hh:mm:ss A");
-  const date = moment.tz("Africa/Khartoum").format("YYYY/MM/DD");
-
   const message = `
-╭─── · · 📊 · · ───╮
-     
-     ⏱️ Runtime
-     
-╰─── · · · · · ───╯
+╭━─━━━━─「 📊 」─━━━━─━╮
+    sʏsᴛᴇᴍ ᴜᴘᴛɪᴍᴇ sᴛᴀᴛs
+╰━─━━━━─「 ⏳ 」─━━━━─━╯
 
-┌ 📊 الاحصائيات
-│ • ⏱️ التشـغيل : ${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}
-│ • 👥 المجموعات : ${groupCount}
-└───────────────┈
+  ◦ ◜الـنـظـام الـنـشـط◞
+  ╎⏱️ التشغيل: ${days}d ${hours}h ${mins}m ${secs}s
+  ╎👥 المجموعات: ${groupCount} مجموعات
+  ╎🌐 الحالة: Active
 
-┌ 🕒 الوقت
-│ • 🕐 الساعة : ${time}
-│ • 📅 التاريخ : ${date}
-└───────────────┈
+  ◦ ◜تـوقـيـت الـسـودان◞
+  ╎📅 اليوم: ${dayName}
+  ╎🕘 الساعة: ${time}
+  ╎🗓️ التاريخ: ${date}
 
-「 جـلـسـة نـشـطـة 」
+  ───━━━━─ 🛡️ ─━━━━───
+   『 ᴋᴀɪʀᴏs ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ 』
+  ───━━━━─ 🪶 ─━━━━───
 `.trim();
 
   setTimeout(() => {
