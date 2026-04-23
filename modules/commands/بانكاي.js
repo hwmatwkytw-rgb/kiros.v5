@@ -63,7 +63,7 @@ module.exports.run = async function({ api, event, args }) {
     fs.writeFileSync(path, Buffer.from(response.data, "binary"));
 
     api.sendMessage({
-      body: "برا احش جدك 🗿📿",
+      body: "بانكاي طلقه فڪِـٰٰٖٖٚ𝑆ــــ꯭​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​🥊ــ۬ꦿ ــݽٖـۦٰۛـِمِۘـ𝑀ــᬼ🔥َ⃟ᬼ‌‍ڪ منشوفك هنا تاني. 𓂍_𓂌",
       attachment: fs.createReadStream(path)
     }, threadID, messageID);
 
