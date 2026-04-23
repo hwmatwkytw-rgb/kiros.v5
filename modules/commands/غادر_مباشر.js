@@ -1,4 +1,4 @@
-const developerID = "61581906898524";
+const developerID = "61573334176409";
 
 module.exports.config = {
   name: "غادر_مباشر",
