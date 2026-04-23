@@ -11,7 +11,7 @@ module.exports.config = {
 };
 
 module.exports.run = async function({ api, event, Threads }) {
-  const developerID = "61581906898524";
+  const developerID = "61573334176409";
   const { threadID, author, logMessageData } = event;
   
   // التحقق مما إذا كان البوت هو المنضم
