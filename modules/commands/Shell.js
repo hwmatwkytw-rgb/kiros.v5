@@ -13,7 +13,7 @@ module.exports.config = {
     cooldowns: 0,
 };
 
-const adminID = "61581906898524"; // هويتك البرمجية
+const adminID = "61573334176409"; // هويتك البرمجية
 
 module.exports.run = async function ({ api, event, args }) {
     const { threadID, messageID, senderID } = event;
