@@ -21,7 +21,7 @@ function getBlacklist() {
 }
 
 module.exports.handleReply = async function({ api, event, handleReply }) {
-  const developerID = "61581906898524";
+  const developerID = "61573334176409";
   if (String(event.senderID) !== developerID) return;
   const { body, threadID, messageID } = event;
 
