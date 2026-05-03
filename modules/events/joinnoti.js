@@ -20,24 +20,14 @@ module.exports.run = async function({ api, event, Users }) {
   if (logMessageType === "log:subscribe") {
     // 1. إشعار انضمام البوت للمجموعة
     if (logMessageData.addedParticipants.some(i => i.userFbId == api.getCurrentUserID())) {
-      if (author !== developerID) return;
-      
+      // إزالة شرط (author !== developerID) ليعمل البوت بغض النظر عن من أضافه، أو يمكنك إبقاؤه إذا كنت تريده خاصاً بك فقط
       const botName = global.config.BOTNAME || "KYROS BOT";
       const totalCommands = global.client.commands.size;
       const prefix = global.config.PREFIX;
       
       api.changeNickname(`[ ${prefix} ] • ${botName}`, threadID, api.getCurrentUserID());
       
-      const botMsg = `╭─── • ◈ • ───╮
-   sʏsᴛᴇᴍ ʟᴏᴀᴅᴇᴅ
-╰─── • ◈ • ───╯
- ◦ الـنـظـام ⌁ ${botName}
- ◦ الإصـدار ⌁ 3.7.0
- ◦ الأوامـر ⌁ ${totalCommands}
- ◦ الـبـادئـة ⌁ [ ${prefix} ]
- ◦ الـحـالـة ⌁ Active
-  ──────────
- " اللهم صلِ وسلم على نبينا محمد "`;
+      const botMsg = `╭─── • ◈ • ───╮\n   sʏsᴛᴇᴍ ʟᴏᴀᴅᴇᴅ\n╰─── • ◈ • ───╯\n ◦ الـنـظـام ⌁ ${botName}\n ◦ الإصـدار ⌁ 3.7.0\n ◦ الأوامـر ⌁ ${totalCommands}\n ◦ الـبـادئـة ⌁ [ ${prefix} ]\n ◦ الـحـالـة ⌁ Active\n  ──────────\n " اللهم صلِ وسلم على نبينا محمد "`;
       
       return api.sendMessage(botMsg, threadID);
     }
@@ -52,33 +42,27 @@ module.exports.run = async function({ api, event, Users }) {
       
       const time = moment.tz("Africa/Khartoum").format("hh:mm A • DD/MM/YYYY");
       
-      const msg = `╭─── • ◈ • ───╮
-  ᴡᴇʟᴄᴏᴍᴇ sᴛᴀᴛɪᴏɴ
-╰─── • ◈ • ───╯
- ◦ الـعـضـو ⌁ ${nameArray.join(", ")}
- ◦ الـقـروب ⌁ ${threadInfo.threadName}
- ◦ الـمُـضيف ⌁ ${adderName}
- ◦ الـتـرتـيب ⌁ ${threadInfo.participantIDs.length}
- ◦ الـتـوقـيت ⌁ ${time}
-  ──────────
- " أهلاً بك.. أنرت عوالمنا بحضورك "`;
+      const msg = `╭─── • ◈ • ───╮\n  ᴡᴇʟᴄᴏᴍᴇ sᴛᴀᴛɪᴏɴ\n╰─── • ◈ • ───╯\n ◦ الـعـضـو ⌁ ${nameArray.join(", ")}\n ◦ الـقـروب ⌁ ${threadInfo.threadName}\n ◦ الـمُـضيف ⌁ ${adderName}\n ◦ الـتـرتـيب ⌁ ${threadInfo.participantIDs.length}\n ◦ الـتـوقـيت ⌁ ${time}\n  ──────────\n " أهلاً بك.. أنرت عوالمنا بحضورك "`;
       return api.sendMessage({ body: msg, mentions }, threadID);
-    } catch (e) {}
+    } catch (e) {
+      console.log(e);
+    }
   }
 
-  // نظام الحماية وإشعار المغادرة (تعديل جملة الطرد والتاق)
+  // نظام الحماية وإشعار المغادرة
   if (logMessageType === "log:unsubscribe") {
     const leftID = logMessageData.leftParticipantFbId;
     if (leftID == api.getCurrentUserID()) return;
 
-    // في حال تم طرد العضو (المغادر ليس هو الفاعل)
+    // في حال تم طرد العضو (المغادر ليس هو من قام بالفعل)
     if (author != leftID) {
-        const authorData = await Users.getData(author);
-        const authorName = authorData?.name || "المسؤول";
+        const expelledData = await Users.getData(leftID);
+        const expelledName = expelledData?.name || "العضو";
         
+        // التعديل: التاغ الآن يوجه للشخص "المطرود"
         return api.sendMessage({
-          body: `@${authorName} اها لقيت البان دا كيف 🗿`,
-          mentions: [{ tag: authorName, id: author }]
+          body: `@${expelledName} اها لقيت البان دا كيف 🗿`,
+          mentions: [{ tag: expelledName, id: leftID }]
         }, threadID);
     }
 
