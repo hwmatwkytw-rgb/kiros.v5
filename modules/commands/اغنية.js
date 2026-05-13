@@ -1,121 +1,93 @@
-const axios = require('axios');
-const fs = require('fs-extra');
-const path = require('path');
-
-// جلب رابط الـ API المتغير لضمان الاستمرارية
-const getBaseApi = async () => {
-  try {
-    const res = await axios.get(`https://raw.githubusercontent.com/Mostakim0978/D1PT0/refs/heads/main/baseApiUrl.json`);
-    return res.data.api;
-  } catch (e) {
-    return "https://api.d1p70.xyz"; // رابط احتياطي
-  }
-};
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 module.exports.config = {
   name: "اغنية",
-  version: "8.0.0",
-  credits: "Dante Sparda & Gemini",
-  description: "تحميل الموسيقى باستخدام سيرفر مستقر",
+  version: "1.0.0",
+  hasPermssion: 0,
+  credits: "Dante Sparda",
+  description: "البحث عن الأغاني وتحميلها من يوتيوب",
   commandCategory: "الوسائط",
-  usages: "[اسم الأغنية / رابط]",
-  cooldowns: 10
+  usages: "[اسم الأغنية]",
+  cooldowns: 5
 };
 
-module.exports.run = async function({ api, event, args }) {
+module.exports.run = async function ({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
-  const input = args.join(" ");
-  if (!input) return api.sendMessage("○ اكتب اسم الأغنية يا ملك أو ضع رابطاً", threadID, messageID);
+  const query = args.join(" ");
 
-  const checkUrl = /^(?:https?:\/\/)?(?:m\.|www\.)?(?:youtu\.be\/|youtube\.com\/)/;
+  if (!query) return api.sendMessage("⎔ الرجاء كتابة اسم الأغنية", threadID, messageID);
 
   try {
-    const apiUrl = await getBaseApi();
+    api.setMessageReaction("🔍", messageID, () => {}, true);
 
-    // حالة الرابط المباشر
-    if (checkUrl.test(input)) {
-      api.sendMessage("📥 جاري معالجة الرابط، انتظر قليلاً...", threadID);
-      try {
-        const { data } = await axios.get(`${apiUrl}/ytDl3?link=${encodeURIComponent(input)}&format=mp3`);
-        const audioPath = path.join(__dirname, 'cache', `${Date.now()}.mp3`);
-        const stream = await getStream(data.downloadLink, audioPath);
-        
-        return api.sendMessage({ 
-          body: `✅ تـم الـتـحميل\n🎵 العنوان: ${data.title}`, 
-          attachment: stream 
-        }, threadID, () => fs.unlinkSync(audioPath), messageID);
-      } catch (err) {
-        return api.sendMessage("❌ فشل تحميل الرابط، قد يكون الفيديو طويل جداً", threadID, messageID);
-      }
+    // استخدام محرك البحث لجلب 7 نتائج
+    const searchUrl = `https://azadx69x-all-apis-top.vercel.app/api/ytsearch?query=${encodeURIComponent(query)}`;
+    const res = await axios.get(searchUrl);
+    const results = res.data.results.slice(0, 7);
+
+    if (!results || results.length === 0) {
+      return api.sendMessage("⊞ لم يتم العثور على نتائج", threadID, messageID);
     }
 
-    // حالة البحث بالاسم
-    api.sendMessage("🔍 جاري البحث عن الأغنية...", threadID, async (err, info) => {
-      try {
-        const res = await axios.get(`${apiUrl}/ytFullSearch?songName=${encodeURIComponent(input)}`);
-        const results = res.data.slice(0, 6);
+    let msg = "⎔ نتائج البحث المتوفرة:\n───━━━━───\n";
+    results.forEach((item, index) => {
+      msg += `│${index + 1}│ ${item.title}\n`;
+    });
+    msg += "───━━━━───\n⊞ رد برقم الأغنية للتحميل";
 
-        if (results.length === 0) return api.sendMessage("❌ لم أجد نتائج لهذا البحث", threadID, messageID);
-
-        let msg = `╮─── 𝖪𝖠𝖨𝖱𝖴𝖲 𝖯𝖫𝖠𝖸𝖤𝖱 ───╭\n`;
-        results.forEach((item, i) => {
-          msg += `│ ${i + 1}. ${item.title.substring(0, 30)}...\n│ ⏱️ المدة: ${item.time}\n`;
-        });
-        msg += `╯────────────── 🝓\nرد برقم الأغنية ○`;
-
-        api.unsendMessage(info.messageID);
-        return api.sendMessage(msg, threadID, (err, nextInfo) => {
-          global.client.handleReply.push({
-            name: this.config.name,
-            messageID: nextInfo.messageID,
-            author: senderID,
-            results
-          });
-        }, messageID);
-      } catch (e) {
-        api.sendMessage("❌ حدث خطأ أثناء البحث", threadID, messageID);
-      }
+    api.sendMessage(msg, threadID, (err, info) => {
+      global.client.handleReply.push({
+        name: this.config.name,
+        messageID: info.messageID,
+        author: senderID,
+        results: results
+      });
     }, messageID);
 
-  } catch (e) {
-    api.sendMessage("❌ السيرفر لا يستجيب حالياً", threadID, messageID);
+  } catch (error) {
+    return api.sendMessage(`⊞ خطأ أثناء البحث: ${error.message}`, threadID, messageID);
   }
 };
 
-module.exports.handleReply = async function({ api, event, handleReply }) {
+module.exports.handleReply = async function ({ api, event, handleReply }) {
   const { threadID, messageID, body, senderID } = event;
   if (handleReply.author != senderID) return;
 
-  const index = parseInt(body);
-  if (isNaN(index) || index < 1 || index > handleReply.results.length) return;
+  const index = parseInt(body) - 1;
+  if (isNaN(body) || index < 0 || index >= handleReply.results.length) {
+    return api.sendMessage("⎔ اختيار غير صحيح، اختر من 1 إلى 7", threadID, messageID);
+  }
 
-  const target = handleReply.results[index - 1];
+  const video = handleReply.results[index];
   api.unsendMessage(handleReply.messageID);
-  
-  const audioPath = path.join(__dirname, 'cache', `${Date.now()}.mp3`);
+  api.setMessageReaction("⬇️", messageID, () => {}, true);
 
   try {
-    api.setMessageReaction("📥", messageID, () => {}, true);
-    const apiUrl = await getBaseApi();
-    const { data } = await axios.get(`${apiUrl}/ytDl3?link=${target.id}&format=mp3`);
-    
-    const stream = await getStream(data.downloadLink, audioPath);
+    const downloadUrl = `https://azadx69x-all-apis-top.vercel.app/api/sing?song=${encodeURIComponent(video.url)}`;
+    const res = await axios.get(downloadUrl);
 
-    api.sendMessage({ 
-      body: `✅ ${target.title}\n✨ استمتاعاً طيباً`, 
-      attachment: stream 
+    if (!res.data?.success) throw new Error("فشل التحميل");
+
+    const filePath = path.join(__dirname, `cache/sing_${Date.now()}.mp3`);
+    const downloadRes = await axios({
+      url: res.data.audio.url,
+      method: "GET",
+      responseType: "arraybuffer"
+    });
+
+    fs.writeFileSync(filePath, Buffer.from(downloadRes.data));
+
+    api.sendMessage({
+      body: `───━━━━───\n⊞ تم التحميل بنجاح\n⎔ العنوان: ${video.title}\n───━━━━───`,
+      attachment: fs.createReadStream(filePath)
     }, threadID, () => {
-      if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      api.setMessageReaction("✅", messageID, () => {}, true);
     }, messageID);
 
-  } catch (e) {
-    api.sendMessage("❌ فشل تحميل الأغنية، حاول مرة أخرى", threadID, messageID);
+  } catch (error) {
+    api.sendMessage(`⊞ تعذر تحميل الأغنية: ${error.message}`, threadID, messageID);
   }
 };
-
-// دالة مساعدة لتحويل الرابط إلى Stream
-async function getStream(url, filePath) {
-  const res = await axios.get(url, { responseType: "arraybuffer" });
-  fs.outputFileSync(filePath, Buffer.from(res.data));
-  return fs.createReadStream(filePath);
-}
