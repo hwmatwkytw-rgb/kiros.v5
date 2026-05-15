@@ -78,7 +78,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         command = commands.get(checker.bestMatch.target);
       } else {
         // إعادة تفاعل القرد كما طلبت
-        return api.setMessageReaction("🦧", messageID, (err) => {}, true);
+        return api.setMessageReaction("🍁", messageID, (err) => {}, true);
       }
     }
 
