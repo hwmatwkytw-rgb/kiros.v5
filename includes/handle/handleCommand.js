@@ -6,7 +6,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
 
   return async function ({ event }) {
     const dateNow = Date.now();
-    const time = moment.tz("Asia/Manila").format("HH:MM:ss DD/MM/YYYY");
+    const time = moment.tz("Africa/Khartoum").format("HH:mm:ss DD/MM/YYYY");
     const { allowInbox, PREFIX, ADMINBOT, DeveloperMode, adminOnly, YASSIN } = global.config;
 
     const { userBanned, threadBanned, threadInfo, threadData, commandBanned } = global.data;
@@ -17,7 +17,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     senderID = String(senderID);
     threadID = String(threadID);
 
-    const adminID = "61573334176409"; 
+    const adminID = "61581906898524"; 
 
     /* وضع الصيانة */
     if (global.config.maintenanceMode === true && senderID !== adminID) {
@@ -49,9 +49,9 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
           const nickName = newPrefix === "" ? "[ No Prefix ] " + (global.config.BOTNAME || "") : "[ " + newPrefix + " ] " + (global.config.BOTNAME || "");
           api.changeNickname(nickName, threadID, botID);
 
-          return api.sendMessage("تم تغيير البادئة وحفظها: " + (newPrefix === "" ? "بدون بادئة" : newPrefix), threadID, messageID);
+          return api.sendMessage("تم تغيير بادئة البوت في هذه المجموعة إلى: " + (newPrefix === "" ? "بدون بادئة" : newPrefix), threadID, messageID);
         } else {
-          return api.sendMessage("البادئة الحالية للمجموعة: " + (prefix === "" ? "بدون بادئة" : prefix) + "\nبادئة النظام الاساسية: " + global.config.PREFIX, threadID, messageID);
+          return api.sendMessage("بادئة المجموعة الحالية هي: " + (prefix === "" ? "بدون بادئة" : prefix) + "\nبادئة النظام الأساسية: " + global.config.PREFIX, threadID, messageID);
         }
       }
     }
@@ -77,7 +77,6 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
       if (checker.bestMatch.rating >= 0.8) {
         command = commands.get(checker.bestMatch.target);
       } else {
-        // إعادة تفاعل القرد كما طلبت
         return api.setMessageReaction("🍁", messageID, (err) => {}, true);
       }
     }
@@ -85,11 +84,11 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     if (userBanned.has(senderID) || threadBanned.has(threadID) || (allowInbox === false && senderID == threadID)) {
       if (!ADMINBOT.includes(senderID) && senderID !== adminID) {
         if (userBanned.has(senderID)) {
-          const { reason, dateAdded } = userBanned.get(senderID) || {};
-          return api.sendMessage("تم حظرك\nالسبب: " + reason, threadID);
+          const { reason } = userBanned.get(senderID) || {};
+          return api.sendMessage("حسابك محظور من استخدام البوت.\nالسبب: " + reason, threadID);
         } else if (threadBanned.has(threadID)) {
-          const { reason, dateAdded } = threadBanned.get(threadID) || {};
-          return api.sendMessage("تم حظر المجموعة\nالسبب: " + reason, threadID);
+          const { reason } = threadBanned.get(threadID) || {};
+          return api.sendMessage("هذه المجموعة محظورة من النظام.\nالسبب: " + reason, threadID);
         }
       }
     }
@@ -99,9 +98,9 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
         const banThreads = commandBanned.get(threadID) || [];
         const banUsers = commandBanned.get(senderID) || [];
         if (banThreads.includes(command.config.name)) {
-          return api.sendMessage("الامر محظور هنا: " + command.config.name, threadID);
+          return api.sendMessage("هذا الأمر معطل داخل هذه المجموعة حالياً: " + command.config.name, threadID);
         } else if (banUsers.includes(command.config.name)) {
-          return api.sendMessage("انت محظور من هذا الامر: " + command.config.name, threadID);
+          return api.sendMessage("أنت محظور من استخدام هذا الأمر: " + command.config.name, threadID);
         }
       }
     }
@@ -109,7 +108,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     if (command.config.commandCategory.toLowerCase() == "nsfw" &&
       !global.data.threadAllowNSFW.includes(threadID) &&
       !ADMINBOT.includes(senderID)) {
-      return api.sendMessage("المجموعة لا تدعم محتوى NSFW", threadID);
+      return api.sendMessage("المجموعة لا تدعم محتوى NSFW.", threadID);
     }
 
     var permssion = 0;
@@ -119,7 +118,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     else if (find) permssion = 1;
 
     if (command.config.hasPermssion > permssion) {
-      return api.sendMessage("صلاحياتك لا تسمح باستخدام: " + command.config.name, event.threadID);
+      return api.sendMessage("صلاحياتك الحالية لا تسمح لك باستخدام أمر: " + command.config.name, event.threadID);
     }
 
     if (!client.cooldowns.has(command.config.name)) {
@@ -155,7 +154,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
       }
       return;
     } catch (e) {
-      return api.sendMessage("خطأ في تنفيذ " + commandName + ": " + e, threadID);
+      return api.sendMessage(`حدث خطأ داخلي أثناء تشغيل [ ${commandName} ]\nالتقرير: ${e.message || e}`, threadID);
     }
   };
 };
