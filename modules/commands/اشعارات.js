@@ -5,10 +5,10 @@ const path = require("path");
 module.exports = {
   config: {
     name: "اشعارات",
-    version: "4.6.0",
-    hasPermission: 1,
+    version: "4.7.0",
+    hasPermission: 1, // تم ضبط الصلاحية لتتوافق مع نظام الحماية
     credits: "DANTE SPARDA",
-    description: "منظومة إشعارات المستويات المتقدمة مع خيارات تحكم ذكية وعكسية",
+    description: "منظومة إشعارات المستويات المتقدمة مع خيارات تحكم ذكية وعكسية للمسؤولين فقط",
     commandCategory: "النظام",
     cooldowns: 2
   },
@@ -21,7 +21,9 @@ module.exports = {
     senderID = String(senderID);
 
     const threadData = (await Threads.getData(threadID))?.data || {};
-    if (threadData.rankup === false) return;
+    
+    // التعديل: جعل الإشعارات مغلقة بشكل افتراضي (إن لم تكن معرفة أو إذا كانت false)
+    if (typeof threadData.rankup === "undefined" || threadData.rankup === false) return;
 
     // جلب بيانات العملات والتفاعل الحالي
     let userCurrency = await Currencies.getData(senderID) || {};
@@ -54,7 +56,7 @@ module.exports = {
       const completedBlocks = Math.min(barLength, Math.floor((progress / needed) * barLength));
       const progressBar = "▰".repeat(completedBlocks) + "▱".repeat(barLength - completedBlocks);
 
-      // صياغة التصميم الهندسي للمظهر والبيانات
+      // صياغة التصميم الهندسي للمظهر والبيانات (تم حذف كلمة كايروس الفخم)
       const outputMessage = 
         `╭─  ───  ───  ───  ───  ─╮\n` +
         `     𝖪 𝖳 𝖴 𝖲   𝖫 𝖤 𝖵 𝖤 𝖫   𝖴 𝖯\n` +
@@ -65,7 +67,7 @@ module.exports = {
         ` ⊞ الـتـقـدم ∘ ${progressBar}\n` +
         ` ⊞ الـخـبـرة الـحـالـيـة ∘ ${exp} XP\n` +
         ` ⊞ الـمـتـبـقـي للـقـفـز ∘ ${remaining} رسالة\n\n` +
-        ` ⎔ الـنـظـام : ڪايروس الفخم`;
+        ` ⎔ الـنـظـام : منظومة الإشعارات`;
 
       const backgrounds = [
         "https://i.ibb.co/DffbB7x/2-7-BDCACE.png",
@@ -100,23 +102,34 @@ module.exports = {
     }
   },
 
-  // نظام التحكم الذكي بالأمر الرئيسي
   run: async function ({ api, event, args, Threads }) {
-    const { threadID, messageID } = event;
+    const { threadID, messageID, senderID } = event;
+    
+    // التحقق من أن المستخدم من مسؤولي المجموعة (الآدمن)
+    try {
+      const threadInfo = await api.getThreadInfo(threadID);
+      const adminIDs = threadInfo.adminIDs.map(item => item.id);
+      
+      // إذا لم يكن الشخص المرسل من مسؤولي القروب يتم تجاهل أمره تماماً دون رد
+      if (!adminIDs.includes(senderID)) return;
+    } catch (err) {
+      return; // تجاهل في حال حدوث خطأ بجلب بيانات القروب
+    }
+
     let thread = await Threads.getData(threadID) || {};
     let data = thread.data || {};
 
     const choice = args[0]?.trim();
 
-    // 1. حالة كتابة "/اشعارات تشغيل"
+    // 1. حالة كتابة "تشغيل" فقط للتشغيل الصريح
     if (choice === "تشغيل") {
       data.rankup = true;
       api.setMessageReaction("✅", messageID, () => {}, true);
       await Threads.setData(threadID, { data });
-      return api.sendMessage("🔔 تم تفعيل منظومة إشعارات المستويات (Rankup) داخل هذه المجموعة.", threadID, messageID);
+      return api.sendMessage("🔔 تم تفعيل منظومة إشعارات المستويات داخل هذه المجموعة.", threadID, messageID);
     }
 
-    // 2. حالة كتابة "/اشعارات ايقاف"
+    // 2. حالة كتابة "ايقاف" فقط للإيقاف الصريح
     if (choice === "ايقاف") {
       data.rankup = false;
       api.setMessageReaction("❌", messageID, () => {}, true);
@@ -124,7 +137,7 @@ module.exports = {
       return api.sendMessage("🔕 تم تعطيل إشعارات المستويات لهذه المجموعة.", threadID, messageID);
     }
 
-    // 3. حالة كتابة "/اشعارات" فقط (النظام العكسي التلقائي)
+    // 3. حالة كتابة الأمر الرئيسي فقط (العكس التلقائي والذكي)
     if (!choice) {
       if (typeof data.rankup === "undefined" || data.rankup === false) {
         data.rankup = true;
@@ -138,8 +151,5 @@ module.exports = {
         return api.sendMessage("🔕 [نظام عكسي] تم إيقاف إشعارات المستويات للمجموعة.", threadID, messageID);
       }
     }
-
-    // في حال كتابة خيار آخر خاطئ
-    return api.sendMessage("❓ خيار غير صحيح. استخدم: [اشعارات تشغيل / اشعارات ايقاف] أو اكتب [اشعارات] فقط للعكس.", threadID, messageID);
   }
 };
