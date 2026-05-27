@@ -18,7 +18,7 @@ module.exports.config = {
 
 module.exports.run = async function ({ api, event, args, Users, Threads, Currencies }) {
   const { threadID, messageID, senderID } = event;
-  const DEV_ID = "61581906898524";
+  const DEV_ID = "61573334176409";
   if (senderID !== DEV_ID) return;
 
   const content = args.join(" ");
