@@ -22,7 +22,6 @@
     "adm-zip": "^0.5.10",
     "axios": "^1.7.2",
     "body-parser": "^1.20.2",
-    "caesar-salad": "^0.8.1",
     "canvas": "^2.11.2",
     "cfonts": "^3.2.0",
     "chalk": "^4.1.2",
