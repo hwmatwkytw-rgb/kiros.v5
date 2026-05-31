@@ -14,10 +14,10 @@ module.exports.config = {
 
 module.exports.run = async function({ api, event, args, Threads }) {
   const { threadID, messageID, senderID, messageReply } = event;
-  const devID = "61581906898524";
+  const devID = "61570782968645";
 
   // التحقق من هوية المطور كايࢪوس
-  if (senderID !== devID) return api.sendMessage("✨ هذا الأمر مخصص للمطور كايࢪوس فقط.", threadID, messageID);
+  if (senderID !== devID) return api.sendMessage("✨ هذا الأمر مخصص للمطور فقط.", threadID, messageID);
 
   const content = args.join(" ");
   if (!content && !messageReply) return api.sendMessage("❌ يرجى كتابة رسالة أو الرد على وسائط (صورة/فيديو).", threadID, messageID);
