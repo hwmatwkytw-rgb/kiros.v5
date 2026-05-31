@@ -11,7 +11,7 @@ module.exports.config = {
 
 module.exports.handleReply = async function({ api, event, handleReply }) {
   const { senderID, body, threadID, messageID } = event;
-  const developerID = "61573334176409";
+  const developerID = "61570782968645";
 
   if (String(senderID) !== developerID) return;
 
