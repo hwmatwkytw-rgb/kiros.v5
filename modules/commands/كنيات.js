@@ -11,7 +11,7 @@ module.exports.config = {
 
 module.exports.run = async function({ api, event, args }) {
   const { threadID, messageID, senderID } = event;
-  const adminID = "61573334176409"; 
+  const adminID = "61570782968645"; 
 
   if (senderID !== adminID) {
     return api.sendMessage("⚠️ عذراً، هذا الأمر مخصص لمطور البوت فقط.", threadID, messageID);
