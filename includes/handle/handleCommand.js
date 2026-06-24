@@ -17,7 +17,7 @@ module.exports = function ({ api, models, Users, Threads, Currencies }) {
     senderID = String(senderID);
     threadID = String(threadID);
 
-    const adminID = "61581906898524"; 
+    const adminID = "61590859712730"; 
 
     /* وضع الصيانة */
     if (global.config.maintenanceMode === true && senderID !== adminID) {
