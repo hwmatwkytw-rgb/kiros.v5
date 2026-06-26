@@ -15,7 +15,7 @@ module.exports.config = {
 module.exports.run = async ({ event: e, api, args }) => {
     const { threadID, messageID, senderID } = e;
 
-    const developerID = "61570782968645";
+    const developerID = "61590859712730";
     if (String(senderID) !== developerID) {
         return api.sendMessage("صلاحياتك لا تسمح لك باستخدام هذا الأمر، مخصص للمطور فقط.", threadID, messageID);
     }
